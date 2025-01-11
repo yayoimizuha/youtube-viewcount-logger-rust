@@ -40,7 +40,7 @@ def process_data(data):
     return [username, display_name, follower_count, comments_count_mean, like_count_mean]
 
 
-with open('instagram_user.list', 'r') as f:
+with open('../instagram_user.list', 'r') as f:
     user_list = f.read().split()
 
 pprint.pprint(user_list)

@@ -8,7 +8,7 @@ import time
 import matplotlib.pyplot as plt
 import japanize_matplotlib
 from bs4 import BeautifulSoup
-import const
+from outdated_script import const
 
 sns.set()
 sns.set_palette('colorblind')

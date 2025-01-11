@@ -1,9 +1,8 @@
 import glob
 import os.path
 import time
-import const
+from outdated_script import const
 from selenium import webdriver
-import chromedriver_binary
 from selenium.webdriver.support import expected_conditions, ui
 import cv2
 from PIL import Image

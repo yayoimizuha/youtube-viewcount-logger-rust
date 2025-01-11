@@ -1,7 +1,7 @@
 import os
 
 import pandas
-import const
+from outdated_script import const
 
 
 def gen_tsv():
@@ -16,5 +16,5 @@ def gen_tsv():
 
 
 with open("test.html","w") as f:
-    f.write(const.html_base(name="name",content="content"))
+    f.write(const.html_base(name="name", content="content"))
 

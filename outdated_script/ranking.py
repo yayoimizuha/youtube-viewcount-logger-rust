@@ -6,8 +6,8 @@ import numpy
 import pandas
 import sqlite3
 import tweepy
-import const
-from tweet import tweet
+from outdated_script import const
+from outdated_script.tweet import tweet
 
 pandas.options.display.max_rows = None
 pandas.options.display.max_columns = None

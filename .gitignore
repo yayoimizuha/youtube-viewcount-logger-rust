@@ -1,7 +1,7 @@
 Pipfile.lock
 .idea/*
 __pycache__
-out.txt
+outdated_script/out.txt
 user
 frame.pickle
 .vscode

@@ -1,4 +1,4 @@
-from graph_gen import frame_collector
+from outdated_script.graph_gen import frame_collector
 from pandas import DataFrame
 
 tables: dict = frame_collector()

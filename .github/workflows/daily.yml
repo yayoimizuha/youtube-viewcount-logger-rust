@@ -17,10 +17,10 @@ env:
 
 
 
-on:
-  schedule:
-    - cron: '0 23 * * *'
-  workflow_dispatch:
+#on:
+#  schedule:
+#    - cron: '0 23 * * *'
+#  workflow_dispatch:
 
 
 # This workflow will install Python dependencies, run tests and lint with a single version of Python

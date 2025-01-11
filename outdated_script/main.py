@@ -10,7 +10,7 @@ import datetime
 import pandas
 import openpyxl
 import sqlite3
-import const
+from outdated_script import const
 
 pandas.options.display.max_rows = None
 pandas.options.display.max_columns = None
