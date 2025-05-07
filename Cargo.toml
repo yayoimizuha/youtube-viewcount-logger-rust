@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 sqlx = { version = "*", features = ["sqlite", "runtime-tokio"] }
+tokio = { version = "*", features = ["rt", "rt-multi-thread", "macros"] }
+reqwest = { version = "*" }
