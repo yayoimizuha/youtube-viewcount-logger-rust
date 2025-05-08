@@ -17,6 +17,8 @@ async fn main() {
     let table_names = sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
         .fetch_all(&mut py_db).await.unwrap().iter().map(|(tbl_name, ): &(String,)| tbl_name.to_owned()).collect::<Vec<_>>();
     for table in table_names {
+        sqlx::query(format!("CREATE TABLE '{}' ('index' DATE PRIMARY KEY NOT NULL);",table).as_str()).execute(&mut rust_db).await.unwrap();
+
         let rows = sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(&table)
             .fetch_all(&mut py_db).await.unwrap().iter().map(|(index_name, ): &(String,)| { index_name.to_owned() }).collect::<Vec<_>>();
         println!("{}", table);
