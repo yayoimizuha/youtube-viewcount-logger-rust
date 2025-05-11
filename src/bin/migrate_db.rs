@@ -12,7 +12,7 @@ async fn main() {
     }
     let mut rust_db = SqliteConnectOptions::new().create_if_missing(true).filename("data.sqlite").connect().await.unwrap();
     sqlx::query("CREATE TABLE __source__ (playlist_key TEXT PRIMARY KEY NOT NULL,db_key TEXT NOT NULL,hashtag TEXT NOT NULL,screen_name TEXT NOT NULL,is_tweet INTEGER NOT NULL);").execute(&mut rust_db).await.unwrap();
-    sqlx::query("CREATE TABLE __title__ (youtube_id TEXT PRIMARY KEY NOT NULL,title TEXT NOT NULL);").execute(&mut rust_db).await.unwrap();
+    sqlx::query("CREATE TABLE __title__ (youtube_id TEXT PRIMARY KEY NOT NULL,raw_title TEXT,cleaned_title TEXT,structured_title TEXT);").execute(&mut rust_db).await.unwrap();
     // return;
     let table_names = sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
         .fetch_all(&mut py_db).await.unwrap().iter().map(|(tbl_name, ): &(String,)| tbl_name.to_owned()).collect::<Vec<_>>();
@@ -25,7 +25,7 @@ async fn main() {
         for (index, title) in sqlx::query_as(format!("SELECT \"index\",\"タイトル\" FROM '{}';", table).as_str())
             .fetch_all(&mut py_db).await.unwrap().iter().map(|(index, title, ): &(String, String)| { (index.to_owned(), title.to_owned()) }) {
             println!("{}:{}", index, title);
-            sqlx::query("INSERT OR REPLACE INTO __title__(youtube_id,title) VALUES (?,?);")
+            sqlx::query("INSERT OR REPLACE INTO __title__(youtube_id,cleaned_title) VALUES (?,?);")
                 .bind(index.strip_prefix("https://youtu.be/").unwrap()).bind(title).execute(&mut rust_db).await.unwrap();
             sqlx::query(format!("ALTER TABLE '{}' ADD COLUMN '{}' INTEGER;", table, index.strip_prefix("https://youtu.be/").unwrap()).as_str()).execute(&mut rust_db).await.unwrap();
         }
