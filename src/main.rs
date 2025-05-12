@@ -124,7 +124,7 @@ impl VideoData {
                                     system_instruction: None,
                                 };
                                 let llm_resp = llm.post(30, &query).await?.rest().unwrap();
-                                println!("{:#?}", llm_resp.candidates[0]);
+                                println!("{:?}", llm_resp.candidates[0]);
                                 // println!("{:#?}", query);
                                 llm_resp.candidates.get(0).ok_or(anyhow!(format!("llm_resp format is wrong.\n{:#?}",llm_resp.clone())))?
                                     .clone().content.parts.get(0).unwrap().clone().text.unwrap()
@@ -209,6 +209,7 @@ async fn main() {
 
     for (db_key, playlist_key) in sqlx::query_as("SELECT db_key,playlist_key FROM __source__;")
         .fetch_all(db.deref()).await.unwrap().into_iter().map(|(db_key, playlist_key): (String, String)| { (db_key, playlist_key) }) {
+        // break;
         let mut next_page_token: Option<String> = Some("".to_owned());
         while next_page_token.is_some() {
             let mut arg = playlist_items_arg.clone();
@@ -227,7 +228,7 @@ async fn main() {
         }
         // break;
     }
-    println!("{:?}", lookup_table);
+    // println!("{:?}", lookup_table);
     let all_videos = lookup_table.iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
 
     let all_videos_data = join_all(all_videos.into_iter().map(|video| { video.clone().get_data(db.clone(), client.clone()) })).await
@@ -261,8 +262,14 @@ async fn main() {
                     sqlx::query(format!("ALTER TABLE '{}' ADD COLUMN '{}' INTEGER;", &key, &datum.video_id).as_str()).execute(&mut *transaction).await.unwrap();
                 }
             }
-            sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=?;"##, &datum.video_id).as_str()).bind(datum.views).bind(TODAY.clone())
-                .execute(&mut *transaction).await.unwrap();
+            println!("{:?}", datum);
+            match datum.views {
+                None => {}
+                Some(views) => {
+                    sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=datetime(?);"##, &datum.video_id).as_str()).bind(views).bind(TODAY.clone())
+                        .execute(&mut *transaction).await.unwrap();
+                }
+            }
         }
     }
     transaction.commit().await.unwrap();

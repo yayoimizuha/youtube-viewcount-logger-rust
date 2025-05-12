@@ -4,6 +4,7 @@ INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VA
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PL8m86iV3p-nRdW2cckAwqruBKuzrxoVvW', 'BEYOOOOONDS', 'BEYOOOOONDS', 'BEYOOOOONDS', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PL0XLej3y4LDmLO0FHu8HBkldiggTt1Es4', 'つばきファクトリー', 'つばきファクトリー', 'つばきファクトリー', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLHdMoq6t0XIA5JLPo-SyTTqEByvdu1cGA', 'ochanorma', 'ochanorma', 'OCHA NORMA', 1);
+INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLc_REKUn8hhDbzMfjnIocF-siMz7TReb4', 'rosychronicle', 'rosychronicle', 'ロージークロニクル', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLCpSIn0xlyXl0ceNf4rBZvmF2njxunqQC', 'ハロプロダンス部', 'ハロプロダンス部', 'ハロプロダンス部', 0);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLcu1vvKzbBMk1i4k-DF3q5ii0007W-zh7', 'こぶしファクトリー', 'こぶしファクトリー', 'こぶしファクトリー', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLhDVFhoEVU3l3X0obfPzdD5OHTbnv7Oio', 'カントリー・ガールズ', 'カントリー・ガールズ', 'カントリー・ガールズ', 1);
@@ -24,7 +25,6 @@ INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VA
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTx6FGeICQu6AMh_h7XaiWrB', 'シャ乱Q', 'シャ乱Q', 'シャ乱Q', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTxAMChTm-sad305266kliMy', 'LoVendoЯ', 'LoVendoЯ', 'LoVendoЯ', 0);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTzQ054kNN0VAn_TC8HVIPvA', '田﨑あさひ', '田﨑あさひ', '田﨑あさひ', 0);
-INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLXok3xPFmG2Akv9qLrdDW1ArlCiodq9Bi', '小片リサ', '小片リサ', '小片リサ', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLXok3xPFmG2ASK8fo_GEwdk7JQALn0P_o', '高橋愛・田中れいな・夏焼雅', '高橋愛・田中れいな・夏焼雅', '高橋愛・田中れいな・夏焼雅', 0);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTx6nJoI4lDcXIW0RnkIj-WC', '吉川友', '吉川友', '吉川友', 0);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PL106616353F82EF27', '中島卓偉', '中島卓偉', '中島卓偉', 1);
@@ -48,8 +48,10 @@ INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VA
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTxNAXGrN4VW_qpYD1fLoI5H', 'メロン記念日', 'メロン記念日', 'メロン記念日', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTzGddgeMhbXMhXgz8dMgaJs', '太陽とシスコムーン', '太陽とシスコムーン', '太陽とシスコムーン', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLXok3xPFmG2DWOqD9q7yGm608F6gNjUIx', '稲場愛香', '稲場愛香', '稲場愛香', 1);
+INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLXok3xPFmG2DiHcV0pWOnzcJn8wVx7jlL', '譜久村聖', '譜久村聖', '譜久村聖', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLXok3xPFmG2DsiyGQD2A5Elihz05RVIR-', 'mlinemusic', 'mlinemusic', 'M-line Music', 1);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTwIf7DShjl6y2Lf2-MGUvd3', 'タンポポ', 'タンポポ', 'タンポポ', 0);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTw00DcNa2h05AdhzJCr-eiV', 'プッチモニ', 'プッチモニ', 'プッチモニ', 0);
 INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLFMni9aeqKTwrRRpwWLL9U7QQqtPZaPS3', 'ミニモニ。', 'ミニモニ', 'ミニモニ。', 0);
-INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('OLAK5uy_l7b14j3zxTZMiJdO1fYFvhRI2NrHAGYow', 'ME_I', 'ME_I', 'ME:I', 1);
+INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLHBlp1EugxwdY9abMZagocJvRfbc_gVMr', 'ME_I', 'ME_I', 'ME:I', 1);
+INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet) VALUES ('PLCpSIn0xlyXlLr0t1-wpYgHkLt_FUfgLw', 'ME_I', 'ME_I', 'ME_I', 0);
