@@ -17,7 +17,8 @@ env:
 
 
 
-#on:
+on:
+  workflow_dispatch:
 #  schedule:
 #    - cron: '0 23 * * *'
 #  workflow_dispatch:
@@ -35,12 +36,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Firefox
         run: bash < firefox-install.sh
-        
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          
+
       - name: Install dependencies
         run: |
           python -m pip install -q -U pip
@@ -50,7 +51,7 @@ jobs:
           pip freeze
           rm -rf images/*
           rm -rf html/*          
-        
+
 
       - name: get today data
         id: main-async-py
@@ -128,7 +129,7 @@ jobs:
         if: steps.main-async-py.outcome == 'success' && steps.graph_gen-py.outcome == 'success' && steps.table_gen-py.outcome == 'success' && steps.tweet-py.outcome == 'success'
         run: |
           python -c 'import firebase_storage_upload;firebase_storage_upload.upload_log()' 2>&1 | tee -a ./out.txt
-      
+
   excel_export:
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -152,7 +153,7 @@ jobs:
         id: versioning
         run: echo "tag_name=`date '+%Y.%m.%d'`" >> "$GITHUB_OUTPUT"
 
-      # - name: convert SQLite to Excel
+        # - name: convert SQLite to Excel
         # run: python excel_exporter.py
 
 
@@ -191,7 +192,7 @@ jobs:
           git commit -m "convert SQLite to Excel"
           git tag ${{ steps.versioning.outputs.tag_name }}
           git push origin ${{ steps.versioning.outputs.tag_name }}         
-          
+
 
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -203,4 +204,5 @@ jobs:
           tag_name: ${{ steps.versioning.outputs.tag_name }}
           name: ${{ steps.versioning.outputs.tag_name }}
           generate_release_notes: false
+
 

@@ -11,7 +11,7 @@ use google_generative_ai_rs::v1::{api, gemini};
 use google_generative_ai_rs::v1::gemini::{Content, Model, Part, Role};
 use google_generative_ai_rs::v1::gemini::request::{GenerationConfig, SafetySettings};
 use google_generative_ai_rs::v1::gemini::safety::{HarmBlockThreshold, HarmCategory};
-use sqlx::{Database, Executor, Pool, Sqlite, SqlitePool};
+use sqlx::{Error, Pool, Sqlite, SqlitePool};
 use sqlx::sqlite::SqliteConnectOptions;
 use url::Url;
 use once_cell::sync::Lazy;
@@ -79,7 +79,7 @@ impl VideoData {
                         let gemini_cache_value: Value = serde_json::from_str(gemini_cache.as_str())?;
                         match gemini_cache_value.get(&title) {
                             None => {
-                                let llm = api::Client::new_from_model(Model::Custom("gemini-2.0-flash-001".to_owned()), YTV3_API_KEY.clone());
+                                let llm = api::Client::new_from_model(Model::Custom("gemini-2.0-flash-001".to_owned()), GOOGLE_API_KEY.clone());
                                 let query = gemini::request::Request {
                                     contents: vec![
                                         Content {
@@ -124,8 +124,8 @@ impl VideoData {
                                     system_instruction: None,
                                 };
                                 let llm_resp = llm.post(30, &query).await?.rest().unwrap();
-                                println!("{:#?}", llm_resp);
-                                println!("{:#?}", query);
+                                println!("{:#?}", llm_resp.candidates[0]);
+                                // println!("{:#?}", query);
                                 llm_resp.candidates.get(0).ok_or(anyhow!(format!("llm_resp format is wrong.\n{:#?}",llm_resp.clone())))?
                                     .clone().content.parts.get(0).unwrap().clone().text.unwrap()
                             }
@@ -166,18 +166,19 @@ impl VideoData {
     }
 }
 
-static YTV3_API_KEY: Lazy<String> = Lazy::new(|| env::var("YTV3_API_KEY").unwrap());
+static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("YTV3_API_KEY").unwrap());
+static TODAY: Lazy<String> = Lazy::new(|| env::var("TODAY").unwrap());
 static LIST_MAX_RESULTS: usize = 50;
 async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: String, param: HashMap<String, String>, client: Client) -> Option<T> {
     let mut param = param;
-    param.insert("key".to_owned(), YTV3_API_KEY.clone());
+    param.insert("key".to_owned(), GOOGLE_API_KEY.clone());
     let query_url = Url::parse_with_params(format!("https://www.googleapis.com/youtube/v3/{api_path}").as_str(), param.into_iter().collect::<Vec<_>>()).unwrap();
     client.get(query_url).send().await.unwrap().json::<T>().await.ok()
 }
 #[tokio::main]
 async fn main() {
     let mut lookup_table: HashMap<String, HashSet<VideoData>> = HashMap::new();
-    let mut db = Arc::new(SqlitePool::connect_with(SqliteConnectOptions::new().filename("data.sqlite")).await.unwrap());
+    let db = Arc::new(SqlitePool::connect_with(SqliteConnectOptions::new().filename("data.sqlite")).await.unwrap());
     sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
         .fetch_all(db.deref()).await.unwrap().into_iter().filter_map(|(row, ): (String,)| {
         if row.starts_with("__") && row.ends_with("__") { None } else { Some(row) }
@@ -224,11 +225,45 @@ async fn main() {
                 }
             };
         }
-        break;
+        // break;
     }
     println!("{:?}", lookup_table);
-    let all_videos = lookup_table.into_iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
+    let all_videos = lookup_table.iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
 
-    let all_videos_data = join_all(all_videos.into_iter().map(|video| { video.get_data(db.clone(), client.clone()) })).await
+    let all_videos_data = join_all(all_videos.into_iter().map(|video| { video.clone().get_data(db.clone(), client.clone()) })).await
         .into_iter().filter_map(|v| { v.ok() }).collect::<Vec<_>>();
+
+    for video_data in all_videos_data {
+        for (_, group) in &mut lookup_table {
+            if group.contains(&video_data) {
+                group.remove(&video_data);
+                group.insert(video_data.clone());
+            }
+        }
+    }
+    let mut transaction = db.begin().await.unwrap();
+    for (key, set) in lookup_table {
+        match sqlx::query_as::<Sqlite, (String,)>("SELECT tbl_name FROM sqlite_master WHERE type = 'table' AND tbl_name = ?;")
+            .bind(&key).fetch_optional(&mut *transaction).await.ok() {
+            None => {
+                sqlx::query(format!("CREATE TABLE '{}' ('index' DATE PRIMARY KEY NOT NULL);", key).as_str()).execute(&mut *transaction).await.unwrap();
+            }
+            Some(_) => {}
+        }
+        sqlx::query(format!("INSERT INTO '{}'('index') VALUES(datetime(?));", &key).as_str())
+            .bind(TODAY.clone()).execute(&mut *transaction).await.unwrap();
+        let exist_columns = sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(&key)
+            .fetch_all(&mut *transaction).await.unwrap().into_iter().skip(1).map(|(v, ): (String,)| { v }).collect::<HashSet<_>>();
+        for datum in set {
+            match exist_columns.contains(&datum.video_id) {
+                true => {}
+                false => {
+                    sqlx::query(format!("ALTER TABLE '{}' ADD COLUMN '{}' INTEGER;", &key, &datum.video_id).as_str()).execute(&mut *transaction).await.unwrap();
+                }
+            }
+            sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=?;"##, &datum.video_id).as_str()).bind(datum.views).bind(TODAY.clone())
+                .execute(&mut *transaction).await.unwrap();
+        }
+    }
+    transaction.commit().await.unwrap();
 }
