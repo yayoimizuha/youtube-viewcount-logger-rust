@@ -13,3 +13,4 @@ serde_json = { version = "*" }
 serde = { version = "*" }
 anyhow = { version = "*" }
 google-generative-ai-rs = { version = "*", features = ["beta"] }
+futures = { version = "*" }

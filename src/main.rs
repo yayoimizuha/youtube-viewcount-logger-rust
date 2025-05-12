@@ -1,20 +1,22 @@
 use std::env;
 use std::collections::{HashMap, HashSet};
-use std::fmt::format;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
+use std::ops::Deref;
+use std::sync::Arc;
 use anyhow::{anyhow, Context};
+use futures::future::join_all;
 use google_generative_ai_rs::v1::{api, gemini};
 use google_generative_ai_rs::v1::gemini::{Content, Model, Part, Role};
 use google_generative_ai_rs::v1::gemini::request::{GenerationConfig, SafetySettings};
 use google_generative_ai_rs::v1::gemini::safety::{HarmBlockThreshold, HarmCategory};
-use sqlx::{ConnectOptions, Database, Executor, Sqlite, SqliteConnection};
+use sqlx::{Database, Executor, Pool, Sqlite, SqlitePool};
 use sqlx::sqlite::SqliteConnectOptions;
 use url::Url;
 use once_cell::sync::Lazy;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -35,15 +37,16 @@ impl PartialEq for VideoData {
     }
 }
 impl Eq for VideoData {}
+
 impl VideoData {
     async fn get_data(
-        &self,
-        mut executor: SqliteConnection,
+        self,
+        mut executor: Arc<Pool<Sqlite>>,
         client: Client,
     ) -> Result<VideoData, anyhow::Error>
     {
         sqlx::query("INSERT OR IGNORE INTO __title__(youtube_id) VALUES (?)").bind(self.video_id.clone())
-            .execute(&mut executor).await?;
+            .execute(executor.deref()).await?;
         match youtube_data_api_v3::<Value>("videos".to_owned(), HashMap::from([
             ("part", "statistics,snippet"),
             ("fields", "items(snippet/title,statistics/viewCount)"),
@@ -52,19 +55,22 @@ impl VideoData {
             None => { Err(anyhow!("not valid JSON.")) }
             Some(dat) => {
                 println!("{}", dat);
+                if dat["items"].as_array().unwrap().is_empty() {
+                    return Err(anyhow!("movie info is not available"));
+                }
                 let title = dat["items"][0]["snippet"]["title"].as_str().context("title string not available.")?.to_owned();
                 if match sqlx::query_as::<Sqlite, (Option<String>,)>("SELECT raw_title FROM __title__ WHERE youtube_id = ?").bind(self.video_id.clone())
-                    .fetch_optional(&mut executor).await? {
+                    .fetch_optional(executor.deref()).await? {
                     Some((Some(db_title), )) => { db_title != title }
                     _ => { true }
                 } {
                     sqlx::query("UPDATE __title__ SET raw_title = ?,cleaned_title = NULL, structured_title = NULL WHERE youtube_id = ?")
-                        .bind(&title).bind(self.video_id.clone()).execute(&mut executor).await?;
+                        .bind(&title).bind(self.video_id.clone()).execute(executor.deref()).await?;
                 }
                 let structured_title = match sqlx::query_as::<Sqlite, (Option<String>,)>("SELECT structured_title FROM __title__ WHERE youtube_id = ?").bind(self.video_id.clone())
-                    .fetch_optional(&mut executor).await? {
+                    .fetch_optional(executor.deref()).await? {
                     Some((Some(structured_title), )) => {
-                        println!("{:#?}", structured_title);
+                        // println!("{:#?}", structured_title);
                         structured_title
                     }
                     _ => {
@@ -118,8 +124,8 @@ impl VideoData {
                                     system_instruction: None,
                                 };
                                 let llm_resp = llm.post(30, &query).await?.rest().unwrap();
-                                // println!("{:#?}", llm_resp);
-                                // println!("{:#?}", query);
+                                println!("{:#?}", llm_resp);
+                                println!("{:#?}", query);
                                 llm_resp.candidates.get(0).ok_or(anyhow!(format!("llm_resp format is wrong.\n{:#?}",llm_resp.clone())))?
                                     .clone().content.parts.get(0).unwrap().clone().text.unwrap()
                             }
@@ -128,16 +134,30 @@ impl VideoData {
                     }
                 };
                 sqlx::query("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?")
-                    .bind(&structured_title).bind(self.video_id.clone()).execute(&mut executor).await?;
+                    .bind(&structured_title).bind(self.video_id.clone()).execute(executor.deref()).await?;
                 sqlx::query("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?")
                     .bind({
-                        let v:Value = serde_json::from_str(structured_title.as_str())?;
-                        let song_name = v["song_name"].as_str().unwrap().to_owned();
-                        "".to_owned()
-                    }).bind(self.video_id.clone()).execute(&mut executor).await?;
-                println!("{}", structured_title);
-                println!("aaaaaaaaaaa");
-
+                        let v: Value = serde_json::from_str(structured_title.as_str())?;
+                        let song_name = match v["song_name"].as_str().unwrap().to_owned().as_str() {
+                            "" => { None }
+                            x => { Some(x.to_owned()) }
+                        };
+                        let singer = v["singer"].as_array().unwrap().into_iter().map(|v| { v.as_str().unwrap().to_owned() }).collect::<Vec<_>>().join(",");
+                        let edition = match v["edition"].as_str().unwrap().to_owned().as_str() {
+                            "" => { None }
+                            x => { Some(x.to_owned()) }
+                        };
+                        let version = match v["version"].as_str().unwrap().to_owned().as_str() {
+                            "" => { None }
+                            x => { Some(x.to_owned()) }
+                        };
+                        [song_name, match [Some(singer), edition, version]
+                            .into_iter().filter_map(|v| { v }).collect::<Vec<_>>().join(" - ").as_str() {
+                            "" => { None }
+                            x => { Some(x.to_owned()) }
+                        }]
+                            .into_iter().filter_map(|v| { v }).collect::<Vec<_>>().join(" : ")
+                    }).bind(self.video_id.clone()).execute(executor.deref()).await?;
 
                 let view_count = dat["items"][0]["statistics"]["viewCount"].as_str().unwrap().parse::<i64>().context("viewCount not available.")?.to_owned();
                 Ok(VideoData { video_id: self.video_id.clone(), title: Some(title.clone()), views: Some(view_count.clone()) })
@@ -156,18 +176,23 @@ async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: 
 }
 #[tokio::main]
 async fn main() {
-    let mut research_table: HashMap<String, HashSet<VideoData>> = HashMap::new();
-    let mut db = SqliteConnectOptions::new().filename("data.sqlite").connect().await.unwrap();
+    let mut lookup_table: HashMap<String, HashSet<VideoData>> = HashMap::new();
+    let mut db = Arc::new(SqlitePool::connect_with(SqliteConnectOptions::new().filename("data.sqlite")).await.unwrap());
     sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
-        .fetch_all(&mut db).await.unwrap().into_iter().filter_map(|(row, ): (String,)| {
+        .fetch_all(db.deref()).await.unwrap().into_iter().filter_map(|(row, ): (String,)| {
         if row.starts_with("__") && row.ends_with("__") { None } else { Some(row) }
-    }).chain(sqlx::query_as("SELECT db_key FROM __source__;")
-        .fetch_all(&mut db).await.unwrap().into_iter().map(|(row, ): (String,)| { row })).for_each(|key| {
-        research_table.insert(key, HashSet::new());
+    }).for_each(|key| {
+        lookup_table.insert(key, HashSet::new());
     });
-    for (table_name, table_data) in research_table.iter_mut() {
+    sqlx::query_as("SELECT db_key FROM __source__;")
+        .fetch_all(db.deref()).await.unwrap().into_iter().map(|(row, ): (String,)| {
+        row
+    }).for_each(|key| {
+        lookup_table.insert(key, HashSet::new());
+    });
+    for (table_name, table_data) in lookup_table.iter_mut() {
         for video_id in sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(table_name)
-            .fetch_all(&mut db).await.unwrap().into_iter().skip(1).map(|(video_id, ): (String,)| { video_id }) {
+            .fetch_all(db.deref()).await.unwrap().into_iter().skip(1).map(|(video_id, ): (String,)| { video_id }) {
             // let title = sqlx::query_as("SELECT title FROM __title__ WHERE youtube_id = ?").bind(&video_id)
             //     .fetch_one(&mut db).await.map(|(t, ): (String,)| { t }).ok();
             table_data.insert(VideoData { video_id, ..Default::default() });
@@ -181,23 +206,29 @@ async fn main() {
 
     let client = Client::new();
 
-    // for (db_key, playlist_key) in sqlx::query_as("SELECT db_key,playlist_key FROM __source__;")
-    //     .fetch_all(&mut db).await.unwrap().into_iter().map(|(db_key, playlist_key): (String, String)| { (db_key, playlist_key) }) {
-    //     let mut next_page_token: Option<String> = Some("".to_owned());
-    //     while next_page_token.is_some() {
-    //         let mut arg = playlist_items_arg.clone();
-    //         arg.insert("playlistId".to_owned(), playlist_key.to_owned());
-    //         arg.insert("pageToken".to_owned(), next_page_token.clone().unwrap());
-    //         println!("{:?}", arg);
-    //         let resp = youtube_data_api_v3("playlistItems".to_owned(), arg, client.clone()).await;
-    //         next_page_token = resp.get("nextPageToken").map(|v| v.as_str().unwrap().to_owned());
-    //         resp.get("items").unwrap_or(&Value::Array(vec![])).as_array().unwrap().into_iter().for_each(|item| {
-    //             research_table.get_mut(&db_key).unwrap().insert(VideoData { video_id: item["snippet"]["resourceId"]["videoId"].as_str().unwrap().to_owned(), ..Default::default() });
-    //         });
-    //     }
-    //     break;
-    // }
-    // println!("{:?}", research_table);
-    let vec = research_table.into_iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
-    vec.iter().next().unwrap().get_data(db, client).await.unwrap();
+    for (db_key, playlist_key) in sqlx::query_as("SELECT db_key,playlist_key FROM __source__;")
+        .fetch_all(db.deref()).await.unwrap().into_iter().map(|(db_key, playlist_key): (String, String)| { (db_key, playlist_key) }) {
+        let mut next_page_token: Option<String> = Some("".to_owned());
+        while next_page_token.is_some() {
+            let mut arg = playlist_items_arg.clone();
+            arg.insert("playlistId".to_owned(), playlist_key.to_owned());
+            arg.insert("pageToken".to_owned(), next_page_token.clone().unwrap());
+            println!("{:?}", arg);
+            match youtube_data_api_v3::<Value>("playlistItems".to_owned(), arg, client.clone()).await {
+                None => {}
+                Some(resp) => {
+                    next_page_token = resp.get("nextPageToken").map(|v| v.as_str().unwrap().to_owned());
+                    resp.get("items").unwrap_or(&Value::Array(vec![])).as_array().unwrap().into_iter().for_each(|item| {
+                        lookup_table.get_mut(&db_key).unwrap().insert(VideoData { video_id: item["snippet"]["resourceId"]["videoId"].as_str().unwrap().to_owned(), ..Default::default() });
+                    });
+                }
+            };
+        }
+        break;
+    }
+    println!("{:?}", lookup_table);
+    let all_videos = lookup_table.into_iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
+
+    let all_videos_data = join_all(all_videos.into_iter().map(|video| { video.get_data(db.clone(), client.clone()) })).await
+        .into_iter().filter_map(|v| { v.ok() }).collect::<Vec<_>>();
 }
