@@ -1,17 +1,20 @@
 use std::env;
 use std::collections::{HashMap, HashSet};
+use std::fmt::format;
+use std::fs::File;
 use std::hash::{Hash, Hasher};
+use std::io::Read;
 use anyhow::{anyhow, Context};
 use google_generative_ai_rs::v1::{api, gemini};
 use google_generative_ai_rs::v1::gemini::{Content, Model, Part, Role};
 use google_generative_ai_rs::v1::gemini::request::{GenerationConfig, SafetySettings};
 use google_generative_ai_rs::v1::gemini::safety::{HarmBlockThreshold, HarmCategory};
-use sqlx::{ConnectOptions, Database, Executor, SqliteConnection};
+use sqlx::{ConnectOptions, Database, Executor, Sqlite, SqliteConnection};
 use sqlx::sqlite::SqliteConnectOptions;
 use url::Url;
 use once_cell::sync::Lazy;
 use reqwest::Client;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -39,6 +42,8 @@ impl VideoData {
         client: Client,
     ) -> Result<VideoData, anyhow::Error>
     {
+        sqlx::query("INSERT OR IGNORE INTO __title__(youtube_id) VALUES (?)").bind(self.video_id.clone())
+            .execute(&mut executor).await?;
         match youtube_data_api_v3::<Value>("videos".to_owned(), HashMap::from([
             ("part", "statistics,snippet"),
             ("fields", "items(snippet/title,statistics/viewCount)"),
@@ -48,24 +53,33 @@ impl VideoData {
             Some(dat) => {
                 println!("{}", dat);
                 let title = dat["items"][0]["snippet"]["title"].as_str().context("title string not available.")?.to_owned();
-                if match sqlx::query_as("SELECT raw_title FROM __title__ WHERE youtube_id = ?").bind(self.video_id.clone())
-                    .fetch_one(&mut executor).await? {
-                    None => { true }
-                    Some((db_title, )) => { db_title != title }
+                if match sqlx::query_as::<Sqlite, (Option<String>,)>("SELECT raw_title FROM __title__ WHERE youtube_id = ?").bind(self.video_id.clone())
+                    .fetch_optional(&mut executor).await? {
+                    Some((Some(db_title), )) => { db_title != title }
+                    _ => { true }
                 } {
                     sqlx::query("UPDATE __title__ SET raw_title = ?,cleaned_title = NULL, structured_title = NULL WHERE youtube_id = ?")
                         .bind(&title).bind(self.video_id.clone()).execute(&mut executor).await?;
                 }
-                let structured_title = match sqlx::query_as("SELECT structured_title FROM __title__ WHERE youtube_id = ?").bind(self.video_id.clone())
-                    .fetch_one(&mut executor).await.map(|(t, ): (String,)| { t }).ok() {
-                    None => {
-                        let llm = api::Client::new_from_model(Model::Custom("gemini-2.0-flash-001".to_owned()), YTV3_API_KEY.clone());
-                        let query = gemini::request::Request {
-                            contents: vec![
-                                Content {
-                                    role: Role::User,
-                                    parts: vec![Part {
-                                        text: Some(format!(r##"以下にYouTubeタイトルが与えられるので、YouTubeタイトルから楽曲名と歌手、バージョン、エディションをJSON形式で{{"song_name":"XXXXX","singer":["AAAAA","BBBB"],"edition":"CCCCC","version":"DDDDD"}}というフォーマットで出力しなさい。Markdownのコードブロックは使わないこと。
+                let structured_title = match sqlx::query_as::<Sqlite, (Option<String>,)>("SELECT structured_title FROM __title__ WHERE youtube_id = ?").bind(self.video_id.clone())
+                    .fetch_optional(&mut executor).await? {
+                    Some((Some(structured_title), )) => {
+                        println!("{:#?}", structured_title);
+                        structured_title
+                    }
+                    _ => {
+                        let mut gemini_cache: String = "".to_owned();
+                        File::open("gemini-cache.json")?.read_to_string(&mut gemini_cache)?;
+                        let gemini_cache_value: Value = serde_json::from_str(gemini_cache.as_str())?;
+                        match gemini_cache_value.get(&title) {
+                            None => {
+                                let llm = api::Client::new_from_model(Model::Custom("gemini-2.0-flash-001".to_owned()), YTV3_API_KEY.clone());
+                                let query = gemini::request::Request {
+                                    contents: vec![
+                                        Content {
+                                            role: Role::User,
+                                            parts: vec![Part {
+                                                text: Some(format!(r##"以下にYouTubeタイトルが与えられるので、YouTubeタイトルから楽曲名と歌手、バージョン、エディションをJSON形式で{{"song_name":"XXXXX","singer":["AAAAA","BBBB"],"edition":"CCCCC","version":"DDDDD"}}というフォーマットで出力しなさい。Markdownのコードブロックは使わないこと。
 楽曲名は、以下のルールに従って加工しなさい。
 ・それぞれの項目に関する文字列がなかった場合、空白にすること。
 ・楽曲名の読み仮名は、楽曲名から除きなさい。
@@ -78,38 +92,49 @@ impl VideoData {
 
 
 {title}"##)),
-                                        inline_data: None,
-                                        file_data: None,
-                                        video_metadata: None,
-                                    }],
-                                }
-                            ],
-                            tools: vec![],
-                            safety_settings: vec![
-                                SafetySettings { category: HarmCategory::HarmCategoryHarassment, threshold: HarmBlockThreshold::BlockNone },
-                                SafetySettings { category: HarmCategory::HarmCategoryHateSpeech, threshold: HarmBlockThreshold::BlockNone },
-                                SafetySettings { category: HarmCategory::HarmCategorySexuallyExplicit, threshold: HarmBlockThreshold::BlockNone },
-                                SafetySettings { category: HarmCategory::HarmCategoryDangerousContent, threshold: HarmBlockThreshold::BlockNone },
-                            ],
-                            generation_config: Some(GenerationConfig {
-                                temperature: Some(0.0),
-                                top_p: Some(1.0),
-                                top_k: Some(1),
-                                candidate_count: None,
-                                max_output_tokens: Some(1024),
-                                stop_sequences: None,
-                                response_mime_type: Some("application/json".to_owned()),
-                                response_schema: None,
-                            }),
-                            system_instruction: None,
-                        };
-                        let llm_resp = llm.post(30, &query).await?;
-                        println!("{:#?}", llm_resp);
-                        println!("{:#?}", query);
-                        llm_resp.rest().unwrap().candidates.get(1).unwrap().clone().content.parts.get(0).unwrap().clone().text.unwrap()
+                                                inline_data: None,
+                                                file_data: None,
+                                                video_metadata: None,
+                                            }],
+                                        }
+                                    ],
+                                    tools: vec![],
+                                    safety_settings: vec![
+                                        SafetySettings { category: HarmCategory::HarmCategoryHarassment, threshold: HarmBlockThreshold::BlockNone },
+                                        SafetySettings { category: HarmCategory::HarmCategoryHateSpeech, threshold: HarmBlockThreshold::BlockNone },
+                                        SafetySettings { category: HarmCategory::HarmCategorySexuallyExplicit, threshold: HarmBlockThreshold::BlockNone },
+                                        SafetySettings { category: HarmCategory::HarmCategoryDangerousContent, threshold: HarmBlockThreshold::BlockNone },
+                                    ],
+                                    generation_config: Some(GenerationConfig {
+                                        temperature: Some(0.0),
+                                        top_p: Some(1.0),
+                                        top_k: Some(1),
+                                        candidate_count: None,
+                                        max_output_tokens: Some(1024),
+                                        stop_sequences: None,
+                                        response_mime_type: Some("application/json".to_owned()),
+                                        response_schema: None,
+                                    }),
+                                    system_instruction: None,
+                                };
+                                let llm_resp = llm.post(30, &query).await?.rest().unwrap();
+                                // println!("{:#?}", llm_resp);
+                                // println!("{:#?}", query);
+                                llm_resp.candidates.get(0).ok_or(anyhow!(format!("llm_resp format is wrong.\n{:#?}",llm_resp.clone())))?
+                                    .clone().content.parts.get(0).unwrap().clone().text.unwrap()
+                            }
+                            Some(v) => { serde_json::to_string_pretty(v)? }
+                        }
                     }
-                    Some(structured_title) => { structured_title }
                 };
+                sqlx::query("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?")
+                    .bind(&structured_title).bind(self.video_id.clone()).execute(&mut executor).await?;
+                sqlx::query("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?")
+                    .bind({
+                        let v:Value = serde_json::from_str(structured_title.as_str())?;
+                        let song_name = v["song_name"].as_str().unwrap().to_owned();
+                        "".to_owned()
+                    }).bind(self.video_id.clone()).execute(&mut executor).await?;
                 println!("{}", structured_title);
                 println!("aaaaaaaaaaa");
 
