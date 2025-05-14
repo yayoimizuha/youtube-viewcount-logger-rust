@@ -228,6 +228,7 @@ async fn main() {
         }
         // break;
     }
+    // lookup_table = HashMap::from([("譜久村聖".to_owned(), lookup_table["譜久村聖"].clone())]);
     // println!("{:?}", lookup_table);
     let all_videos = lookup_table.iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
 
@@ -245,12 +246,14 @@ async fn main() {
     let mut transaction = db.begin().await.unwrap();
     for (key, set) in lookup_table {
         match sqlx::query_as::<Sqlite, (String,)>("SELECT tbl_name FROM sqlite_master WHERE type = 'table' AND tbl_name = ?;")
-            .bind(&key).fetch_optional(&mut *transaction).await.ok() {
+            .bind(&key).fetch_optional(&mut *transaction).await.ok().unwrap() {
             None => {
+                eprintln!("create table: {key}");
                 sqlx::query(format!("CREATE TABLE '{}' ('index' DATE PRIMARY KEY NOT NULL);", key).as_str()).execute(&mut *transaction).await.unwrap();
             }
             Some(_) => {}
         }
+
         sqlx::query(format!("INSERT INTO '{}'('index') VALUES(datetime(?));", &key).as_str())
             .bind(TODAY.clone()).execute(&mut *transaction).await.unwrap();
         let exist_columns = sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(&key)
