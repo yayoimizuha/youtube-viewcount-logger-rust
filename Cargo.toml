@@ -14,3 +14,5 @@ serde = { version = "*" }
 anyhow = { version = "*" }
 google-generative-ai-rs = { version = "*", features = ["beta"] }
 futures = { version = "*" }
+cron = { version = "*", features = ["serde"] }
+chrono = { version = "*", features = ["alloc"] }

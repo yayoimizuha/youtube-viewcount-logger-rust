@@ -1,0 +1,4 @@
+ATTACH 'data.sqlite' AS sqlite_db (TYPE sqlite);
+ATTACH 'data.duckdb' AS duckdb_db;
+COPY FROM DATABASE sqlite_db TO duckdb_db;
+.exit

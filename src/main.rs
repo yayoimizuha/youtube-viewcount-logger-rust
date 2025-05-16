@@ -4,19 +4,26 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::ops::Deref;
+use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use anyhow::{anyhow, Context};
+use chrono::FixedOffset;
+use cron::Schedule;
 use futures::future::join_all;
 use google_generative_ai_rs::v1::{api, gemini};
 use google_generative_ai_rs::v1::gemini::{Content, Model, Part, Role};
 use google_generative_ai_rs::v1::gemini::request::{GenerationConfig, SafetySettings};
 use google_generative_ai_rs::v1::gemini::safety::{HarmBlockThreshold, HarmCategory};
-use sqlx::{Error, Pool, Sqlite, SqlitePool};
+use once_cell::sync::Lazy;
+use sqlx::{Pool, Sqlite, SqlitePool};
 use sqlx::sqlite::SqliteConnectOptions;
 use url::Url;
-use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde_json::Value;
+use sqlx::types::chrono::Utc;
+use tokio::sync::OnceCell;
+use chrono::format::SecondsFormat;
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -166,8 +173,8 @@ impl VideoData {
     }
 }
 
-static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("YTV3_API_KEY").unwrap());
-static TODAY: Lazy<String> = Lazy::new(|| env::var("TODAY").unwrap());
+static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
+static TODAY: OnceCell<String> = OnceCell::const_new();
 static LIST_MAX_RESULTS: usize = 50;
 async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: String, param: HashMap<String, String>, client: Client) -> Option<T> {
     let mut param = param;
@@ -177,6 +184,28 @@ async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: 
 }
 #[tokio::main]
 async fn main() {
+    TODAY.get_or_init(async || {
+        let mut github_event_path = String::new();
+        File::open(env::var("GITHUB_EVENT_PATH").unwrap()).unwrap().read_to_string(&mut github_event_path).unwrap();
+        let a = match serde_json::from_str::<Value>(github_event_path.as_str()).unwrap().get("schedule") {
+            None => { None }
+            Some(schedule) => {
+                let cron_str = format!("0 {}", schedule.as_str().unwrap().trim());
+                let sched = Schedule::from_str(cron_str.as_str()).unwrap();
+                let mut duration = 100f32;
+                while sched.after(&(Utc::now() - Duration::from_secs_f32(duration))).take_while(|&date| date < Utc::now()).count() == 0 {
+                    duration *= 1.2;
+                }
+                let date = sched.after(&(Utc::now() - Duration::from_secs_f32(duration))).next().unwrap();
+                Some(date)
+            }
+        };
+        let a = a.unwrap_or(Utc::now());
+        a.with_timezone(&FixedOffset::east_opt(3600 * 9).unwrap()).to_rfc3339_opts(SecondsFormat::AutoSi, true).replace("T", " ").chars().take(19).collect::<String>()
+    }).await;
+
+    println!("{}", TODAY.get().unwrap());
+    // return;
     let mut lookup_table: HashMap<String, HashSet<VideoData>> = HashMap::new();
     let db = Arc::new(SqlitePool::connect_with(SqliteConnectOptions::new().filename("data.sqlite")).await.unwrap());
     sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
@@ -255,7 +284,7 @@ async fn main() {
         }
 
         sqlx::query(format!("INSERT INTO '{}'('index') VALUES(datetime(?));", &key).as_str())
-            .bind(TODAY.clone()).execute(&mut *transaction).await.unwrap();
+            .bind(TODAY.get().unwrap()).execute(&mut *transaction).await.unwrap();
         let exist_columns = sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(&key)
             .fetch_all(&mut *transaction).await.unwrap().into_iter().skip(1).map(|(v, ): (String,)| { v }).collect::<HashSet<_>>();
         for datum in set {
@@ -269,7 +298,7 @@ async fn main() {
             match datum.views {
                 None => {}
                 Some(views) => {
-                    sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=datetime(?);"##, &datum.video_id).as_str()).bind(views).bind(TODAY.clone())
+                    sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=datetime(?);"##, &datum.video_id).as_str()).bind(views).bind(TODAY.get().unwrap())
                         .execute(&mut *transaction).await.unwrap();
                 }
             }
