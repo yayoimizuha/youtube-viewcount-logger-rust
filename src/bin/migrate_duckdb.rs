@@ -54,5 +54,6 @@ async fn main() {
         // rust_db.execute(format!(r##"COPY "{}" TO 'data.parquet' (FORMAT parquet,COMPRESSION zstd)"##, table).as_str(), params![]).unwrap();
     }
     rust_db.execute("VACUUM;", []).unwrap();
+    rust_db.execute("CHECKPOINT;", []).unwrap();
 }
 
