@@ -24,7 +24,7 @@ async fn main() {
         // println!("{}", table);
         for (index, title) in sqlx::query_as(format!("SELECT \"index\",\"タイトル\" FROM '{}';", table).as_str())
             .fetch_all(&mut py_db).await.unwrap().iter().map(|(index, title, ): &(String, String)| { (index.to_owned(), title.to_owned()) }) {
-            println!("{}:{}", index, title);
+            println!("{} :{}", index, title);
             sqlx::query("INSERT OR REPLACE INTO __title__(youtube_id,cleaned_title) VALUES (?,?);")
                 .bind(index.strip_prefix("https://youtu.be/").unwrap()).bind(title).execute(&mut rust_db).await.unwrap();
             sqlx::query(format!("ALTER TABLE '{}' ADD COLUMN '{}' INTEGER;", table, index.strip_prefix("https://youtu.be/").unwrap()).as_str()).execute(&mut rust_db).await.unwrap();

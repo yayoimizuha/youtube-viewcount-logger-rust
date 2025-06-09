@@ -184,7 +184,7 @@ async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: 
 }
 #[tokio::main]
 async fn main() {
-    TODAY.get_or_init(async || {
+    TODAY.get_or_init(|| async {
         let mut github_event_path = String::new();
         File::open(env::var("GITHUB_EVENT_PATH").unwrap()).unwrap().read_to_string(&mut github_event_path).unwrap();
         let a = match serde_json::from_str::<Value>(github_event_path.as_str()).unwrap().get("schedule") {

@@ -15,3 +15,5 @@ anyhow = { version = "*" }
 google-generative-ai-rs = { version = "*", features = ["beta"] }
 futures = { version = "*" }
 duckdb = { version = "*", features = ["bundled", "parquet"] }
+chrono = { version = "*" }
+cron = { version = "*" }
