@@ -8,8 +8,8 @@ use std::path::PathBuf;
 #[tokio::main]
 async fn main() {
     let mut py_db = SqliteConnectOptions::new().filename("save.sqlite").connect().await.unwrap();
-    if fs::exists(PathBuf::from("data.parquet")).unwrap() {
-        fs::remove_file("data.parquet").unwrap();
+    if fs::exists(PathBuf::from("data.duckdb")).unwrap() {
+        fs::remove_file("data.duckdb").unwrap();
     }
     let rust_db = Connection::open("data.duckdb").unwrap();
 
@@ -25,7 +25,7 @@ async fn main() {
             println!("{} :{}", index, title);
             rust_db.execute("INSERT OR REPLACE INTO __title__(youtube_id,cleaned_title) VALUES (?,?);",
                             params![index.strip_prefix("https://youtu.be/").unwrap(),title]).unwrap();
-            rust_db.execute(format!(r##"ALTER TABLE "{}" ADD COLUMN "{}" INT64;"##, table, index.strip_prefix("https://youtu.be/").unwrap()).as_str(),
+            rust_db.execute(format!(r##"ALTER TABLE "{}" ADD COLUMN "{}" INT32;"##, table, index.strip_prefix("https://youtu.be/").unwrap()).as_str(),
                             params![]).unwrap();
         }
         let mut queries = Vec::new();
@@ -53,5 +53,6 @@ async fn main() {
         rust_db.execute_batch(queries.join("\n").as_str()).unwrap();
         // rust_db.execute(format!(r##"COPY "{}" TO 'data.parquet' (FORMAT parquet,COMPRESSION zstd)"##, table).as_str(), params![]).unwrap();
     }
+    rust_db.execute("VACUUM;", []).unwrap();
 }
 
