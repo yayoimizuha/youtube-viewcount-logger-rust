@@ -216,12 +216,16 @@ async fn main() {
             table_data.insert(VideoData { video_id, ..Default::default() });
         }
     }
+    // println!("{:?}", lookup_table["鈴木愛理"]);
+    // return;
     duckdb.prepare("SELECT db_key FROM __source__;").unwrap()
         .query_map([], |row| { Ok(row.get::<_, String>(0).unwrap()) })
         .unwrap().filter_map(|v| v.ok()).map(|row: String| {
         row
     }).for_each(|key| {
-        lookup_table.insert(key, HashSet::new());
+        if !lookup_table.contains_key(&key) {
+            lookup_table.insert(key, HashSet::new());
+        }
     });
     let playlist_items_arg = HashMap::from([
         ("part", "snippet"),
@@ -235,7 +239,7 @@ async fn main() {
         .query_map([], |row| { Ok((row.get::<_, String>(0).unwrap(), row.get::<_, String>(1).unwrap())) })
         .unwrap().filter_map(|v| v.ok()) {
         // break;
-        // if db_key != "譜久村聖" {
+        // if db_key != "鈴木愛理" {
         //     continue;
         // }
         let mut next_page_token: Option<String> = Some("".to_owned());
@@ -255,7 +259,7 @@ async fn main() {
             };
         }
     }
-    // lookup_table = HashMap::from([("譜久村聖".to_owned(), lookup_table["譜久村聖"].clone())]);
+    // lookup_table = HashMap::from([("鈴木愛理".to_owned(), lookup_table["鈴木愛理"].clone())]);
     // println!("{:?}", lookup_table);
     let all_videos = lookup_table.iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
 
@@ -295,12 +299,12 @@ async fn main() {
                     transaction.execute(format!(r##"ALTER TABLE "{}" ADD COLUMN "{}" INT32;"##, &key, &datum.video_id).as_str(), []).unwrap();
                 }
             }
-            println!("{:?}", datum);
+            // println!("{:?}", datum);
             match datum.views {
                 None => {}
                 Some(views) => {
                     let query = format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=timezone('Asia/Tokyo',TIMESTAMP '{}');"##, &datum.video_id, TODAY.get().unwrap());
-                    println!("{}", query);
+                    println!("{}", query.replace("?", &views.to_string()));
                     transaction.execute(query.as_str(), params![views]).unwrap();
                 }
             }

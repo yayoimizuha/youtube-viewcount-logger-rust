@@ -55,5 +55,8 @@ async fn main() {
     }
     rust_db.execute("VACUUM;", []).unwrap();
     rust_db.execute("CHECKPOINT;", []).unwrap();
+    
+    let playlists_build_sql = fs::read_to_string("playlists_build.sql").unwrap();
+    rust_db.execute_batch(&playlists_build_sql).unwrap();
 }
 
