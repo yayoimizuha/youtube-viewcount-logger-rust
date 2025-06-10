@@ -24,6 +24,7 @@ use serde_json::Value;
 use sqlx::types::chrono::Utc;
 use tokio::sync::OnceCell;
 use chrono::format::SecondsFormat;
+use duckdb::{params, Connection};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -203,26 +204,31 @@ async fn main() {
         let a = a.unwrap_or(Utc::now());
         a.with_timezone(&FixedOffset::east_opt(3600 * 9).unwrap()).to_rfc3339_opts(SecondsFormat::AutoSi, true).replace("T", " ").chars().take(19).collect::<String>()
     }).await;
-
+    let mut duckdb = Connection::open("data.duckdb").unwrap();
+    // let tables = duckdb.prepare("SHOW TABLES;").unwrap().query_map([], |row| { Ok(row.get::<_, String>(0).unwrap()) }).unwrap().filter_map(|v| v.ok()).collect::<Vec<_>>();
+    // println!("{:?}", tables);
+    // return;
     println!("{}", TODAY.get().unwrap());
     // return;
     let mut lookup_table: HashMap<String, HashSet<VideoData>> = HashMap::new();
     let db = Arc::new(SqlitePool::connect_with(SqliteConnectOptions::new().filename("data.sqlite")).await.unwrap());
-    sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
-        .fetch_all(db.deref()).await.unwrap().into_iter().filter_map(|(row, ): (String,)| {
+    duckdb.prepare("SHOW TABLES;").unwrap().query_map([], |row| { Ok(row.get::<_, String>(0).unwrap()) })
+        .unwrap().filter_map(|v| v.ok()).filter_map(|row: String| {
         if row.starts_with("__") && row.ends_with("__") { None } else { Some(row) }
     }).for_each(|key| {
         lookup_table.insert(key, HashSet::new());
     });
-    sqlx::query_as("SELECT db_key FROM __source__;")
-        .fetch_all(db.deref()).await.unwrap().into_iter().map(|(row, ): (String,)| {
+    duckdb.prepare("SELECT db_key FROM __source__;").unwrap()
+        .query_map([], |row| { Ok(row.get::<_, String>(0).unwrap()) })
+        .unwrap().filter_map(|v| v.ok()).map(|row: String| {
         row
     }).for_each(|key| {
         lookup_table.insert(key, HashSet::new());
     });
     for (table_name, table_data) in lookup_table.iter_mut() {
-        for video_id in sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(table_name)
-            .fetch_all(db.deref()).await.unwrap().into_iter().skip(1).map(|(video_id, ): (String,)| { video_id }) {
+        for video_id in duckdb.prepare("SELECT name FROM pragma_table_info(?);").unwrap()
+            .query_map([table_name], |row| { Ok(row.get::<_, String>(0).unwrap()) })
+            .unwrap().filter_map(|v| v.ok()) {
             // let title = sqlx::query_as("SELECT title FROM __title__ WHERE youtube_id = ?").bind(&video_id)
             //     .fetch_one(&mut db).await.map(|(t, ): (String,)| { t }).ok();
             table_data.insert(VideoData { video_id, ..Default::default() });
@@ -236,8 +242,9 @@ async fn main() {
 
     let client = Client::new();
 
-    for (db_key, playlist_key) in sqlx::query_as("SELECT db_key,playlist_key FROM __source__;")
-        .fetch_all(db.deref()).await.unwrap().into_iter().map(|(db_key, playlist_key): (String, String)| { (db_key, playlist_key) }) {
+    for (db_key, playlist_key) in duckdb.prepare("SELECT db_key,playlist_key FROM __source__;").unwrap()
+        .query_map([], |row| { Ok((row.get::<_, String>(0).unwrap(), row.get::<_, String>(1).unwrap())) })
+        .unwrap().filter_map(|v| v.ok()) {
         // break;
         let mut next_page_token: Option<String> = Some("".to_owned());
         while next_page_token.is_some() {
@@ -272,37 +279,58 @@ async fn main() {
             }
         }
     }
-    let mut transaction = db.begin().await.unwrap();
+    // let mut transaction = db.begin().await.unwrap();
+    let transaction = duckdb.transaction().unwrap();
     for (key, set) in lookup_table {
-        match sqlx::query_as::<Sqlite, (String,)>("SELECT tbl_name FROM sqlite_master WHERE type = 'table' AND tbl_name = ?;")
-            .bind(&key).fetch_optional(&mut *transaction).await.ok().unwrap() {
-            None => {
+        // match sqlx::query_as::<Sqlite, (String,)>("SELECT tbl_name FROM sqlite_master WHERE type = 'table' AND tbl_name = ?;")
+        //     .bind(&key).fetch_optional(&mut *transaction).await.ok().unwrap() {
+        //     None => {
+        //         eprintln!("create table: {key}");
+        //         sqlx::query(format!("CREATE TABLE '{}' ('index' DATE PRIMARY KEY NOT NULL);", key).as_str()).execute(&mut *transaction).await.unwrap();
+        //     }
+        //     Some(_) => {}
+        // }
+        match transaction.prepare("SELECT COUNT() FROM information_schema.tables WHERE table_name = ?;").unwrap()
+            .query_map([&key], |row| { Ok(row.get::<_, i64>(0).unwrap()) })
+            .unwrap().filter_map(|v| v.ok()).next().unwrap() {
+            0 => {
                 eprintln!("create table: {key}");
-                sqlx::query(format!("CREATE TABLE '{}' ('index' DATE PRIMARY KEY NOT NULL);", key).as_str()).execute(&mut *transaction).await.unwrap();
+                transaction.execute(format!(r##"CREATE TABLE "{}" (index TIMESTAMPTZ PRIMARY KEY NOT NULL);"##, &key).as_str(), []).unwrap();
             }
-            Some(_) => {}
+            _ => {}
         }
 
-        sqlx::query(format!("INSERT INTO '{}'('index') VALUES(datetime(?));", &key).as_str())
-            .bind(TODAY.get().unwrap()).execute(&mut *transaction).await.unwrap();
-        let exist_columns = sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(&key)
-            .fetch_all(&mut *transaction).await.unwrap().into_iter().skip(1).map(|(v, ): (String,)| { v }).collect::<HashSet<_>>();
+
+        // sqlx::query(format!("INSERT INTO '{}'('index') VALUES(datetime(?));", &key).as_str())
+        //     .bind(TODAY.get().unwrap()).execute(&mut *transaction).await.unwrap();
+        transaction.execute(format!("INSERT INTO '{}'('index') VALUES(timezone('Asia/Tokyo',TIMESTAMP ?));", &key).as_str(), [TODAY.get().unwrap()]).unwrap();
+
+        // let exist_columns = sqlx::query_as("SELECT name FROM pragma_table_info(?);").bind(&key)
+        //     .fetch_all(&mut *transaction).await.unwrap().into_iter().skip(1).map(|(v, ): (String,)| { v }).collect::<HashSet<_>>();
+        let exist_columns = transaction.prepare("SELECT name FROM pragma_table_info(?);").unwrap()
+            .query_map([&key], |row| { Ok(row.get::<_, String>(0).unwrap()) })
+            .unwrap().filter_map(|v| v.ok()).skip(1).collect::<HashSet<_>>();
         for datum in set {
             match exist_columns.contains(&datum.video_id) {
                 true => {}
                 false => {
-                    sqlx::query(format!("ALTER TABLE '{}' ADD COLUMN '{}' INTEGER;", &key, &datum.video_id).as_str()).execute(&mut *transaction).await.unwrap();
+                    transaction.execute(format!("ALTER TABLE '{}' ADD COLUMN '{}' INT32;", &key, &datum.video_id).as_str(), []).unwrap();
+
+                    // sqlx::query(format!("ALTER TABLE '{}' ADD COLUMN '{}' INTEGER;", &key, &datum.video_id).as_str()).execute(&mut *transaction).await.unwrap();
                 }
             }
             println!("{:?}", datum);
             match datum.views {
                 None => {}
                 Some(views) => {
-                    sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=datetime(?);"##, &datum.video_id).as_str()).bind(views).bind(TODAY.get().unwrap())
-                        .execute(&mut *transaction).await.unwrap();
+                    transaction.execute(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=timezone('Asia/Tokyo',TIMESTAMP ?);"##, &datum.video_id).as_str(), [TODAY.get().unwrap()]).unwrap();
+
+                    // sqlx::query(format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=datetime(?);"##, &datum.video_id).as_str()).bind(views).bind(TODAY.get().unwrap())
+                    //     .execute(&mut *transaction).await.unwrap();
                 }
             }
         }
     }
-    transaction.commit().await.unwrap();
+    // transaction.commit().await.unwrap();
+    transaction.commit().unwrap();
 }
