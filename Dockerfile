@@ -1,4 +1,4 @@
-FROM rust:1-slim
+FROM rust:1-slim as builder
 LABEL authors="tomokazu"
 RUN apt update && apt upgrade -y && apt install libssl-dev -y
 RUN pwd
