@@ -40,6 +40,7 @@
   "dependencies": {
     "echarts": "^5.6.0",
     "@duckdb/duckdb-wasm": "^1.29.1-dev132.0",
-    "@duckdb/duckdb-wasm-shell": "^1.29.1-dev132.0"
+    "@duckdb/duckdb-wasm-shell": "^1.29.1-dev132.0",
+    "@oneidentity/zstd-js": "^1.0.3"
   }
 }
