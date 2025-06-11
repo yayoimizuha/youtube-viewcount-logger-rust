@@ -1,6 +1,6 @@
 FROM rust:1-slim as builder
 LABEL authors="tomokazu"
-RUN apt update && apt upgrade -y && apt install libssl-dev -y
+RUN apt update && apt upgrade -y && apt install libssl-dev build-essential pkg-config -y
 RUN pwd
 COPY . .
 RUN cargo install --path .
