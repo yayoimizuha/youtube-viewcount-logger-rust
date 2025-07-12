@@ -8,5 +8,5 @@ RUN cargo install --path .
 
 FROM debian:stable-slim
 RUN apt update && apt install -y libssl-dev && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /usr/local/cargo/bin/youtube-viewcount-logger-rust /usr/local/bin/youtube-viewcount-logger-rust
+COPY --from=builder /usr/local/cargo/bin/ /usr/local/bin/
 CMD ["youtube-viewcount-logger-rust"]
