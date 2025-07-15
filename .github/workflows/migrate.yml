@@ -16,6 +16,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            Cargo.lock
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       # download https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite
@@ -26,10 +27,13 @@ jobs:
         run: cargo run --release --bin migrate_duckdb
 
       - name: Compress data
-        run: zstd -k data.duckdb --ultra -22
+        run: zstd data.duckdb --ultra -22
 
       - name: Commit changes
         run: |
+          git lfs install
+          git lfs track data.duckdb.zst
+          git lfs track
           git remote set-url origin https://github-actions:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}
           git config --global core.quotepath off
           git config --global user.name "${GITHUB_ACTOR}"
@@ -38,5 +42,14 @@ jobs:
           git add data.duckdb.zst -f
           git commit -m "Migration from https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite"
           git push origin HEAD:${GITHUB_REF} -f
-          
 
+
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            Cargo.lock
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
