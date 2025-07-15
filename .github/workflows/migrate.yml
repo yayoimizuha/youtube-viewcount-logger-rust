@@ -1,0 +1,42 @@
+name: migrate.yml
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # download https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite
+      - name: Download save.sqlite
+        run: wget https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite
+
+      - name: Run migration
+        run: cargo run --release --bin migrate_duckdb
+
+      - name: Compress data
+        run: zstd -k data.duckdb --ultra -22
+
+      - name: Commit changes
+        run: |
+          git remote set-url origin https://github-actions:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}
+          git config --global core.quotepath off
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git status
+          git add data.duckdb.zst -f
+          git commit -m "Migration from https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite"
+          git push origin HEAD:${GITHUB_REF} -f
+          
+
