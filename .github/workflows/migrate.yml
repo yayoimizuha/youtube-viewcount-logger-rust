@@ -8,9 +8,11 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Cargo cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
@@ -19,7 +21,6 @@ jobs:
             Cargo.lock
           key: ${{ runner.os }}-cargo
 
-      # download https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite
       - name: Download save.sqlite
         run: wget https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite
 
@@ -40,12 +41,12 @@ jobs:
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git status
           git add data.duckdb.zst -f
-          git commit -m "Migration from https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite"
+          git commit -m "Migration from https://github.com/yayoimizuha/youtube-viewcount-logger-python/blob/master/save.sqlite"
           git push origin HEAD:${GITHUB_REF} -f
 
 
       - name: Cargo cache
-        uses: actions/cache@v4
+        uses: actions/cache/save@v4
         with:
           path: |
             ~/.cargo/registry
