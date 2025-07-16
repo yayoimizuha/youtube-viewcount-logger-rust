@@ -19,7 +19,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo
+          key: ${{ runner.os }}-cargo-
 
       - name: Update dependencies
         run: cargo update
@@ -35,4 +35,4 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
