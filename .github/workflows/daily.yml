@@ -20,7 +20,7 @@ env:
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 23 * * *'
 #  push:
 #    branches:
 #      - master
@@ -42,7 +42,12 @@ jobs:
           EVENT_DATA=$(cat $GITHUB_EVENT_PATH)
           echo "::set-output name=event_json::$EVENT_DATA"
 
-      - name: checkout
+      - name: Generate UUID
+        id: uuid
+        run:
+          echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
+
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
@@ -55,7 +60,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-$( uuidgen )
+          key: ${{ runner.os }}-cargo-${{ steps.uuid.outputs.uuid }}
 
       - name: extract zstd
         run: zstd -dk -f data.duckdb.zst

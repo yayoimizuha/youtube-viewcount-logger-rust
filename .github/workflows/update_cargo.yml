@@ -6,7 +6,11 @@ jobs:
   update-cargo:
     runs-on: ubuntu-latest
     steps:
-      - name: checkout
+      - name: Generate UUID
+        id: uuid
+        run: echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
+
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
@@ -35,4 +39,4 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-$( uuidgen )
+          key: ${{ runner.os }}-cargo-${{ steps.uuid.outputs.uuid }}
