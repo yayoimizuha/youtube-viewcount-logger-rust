@@ -77,7 +77,7 @@ jobs:
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git status
           git add data.duckdb.zst -f
-          git commit -m "Migration from https://github.com/yayoimizuha/youtube-viewcount-logger-python/blob/master/save.sqlite"
+          git commit -m "Daily update @ $(date +'%H:%M:%S')"
           git push origin HEAD:${GITHUB_REF} -f
 
 
