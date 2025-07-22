@@ -60,7 +60,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-${{ steps.uuid.outputs.uuid }}
+          key: ${{ runner.os }}-cargo-
 
       - name: extract zstd
         run: zstd -dk -f data.duckdb.zst
