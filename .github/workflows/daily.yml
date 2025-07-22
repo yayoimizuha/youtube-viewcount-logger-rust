@@ -4,16 +4,14 @@
 name: Daily get UP-FRONT & Hello!Project YouTube view count
 
 env:
-  ACCESS_TOKEN: ${{secrets.ACCESS_TOKEN}}
-  ACCESS_TOKEN_SECRET: ${{secrets.ACCESS_TOKEN_SECRET}}
-  API_KEY: ${{secrets.API_KEY}}
-  API_SECRET: ${{secrets.API_SECRET}}
-  DEBUG: NO
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_CREDENTIAL }}
+#  DEBUG: NO
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   TZ: 'Asia/Tokyo'
   RUST_BACKTRACE: 'full'
+
+permissions:
+  contents: write
+
 
 
 
