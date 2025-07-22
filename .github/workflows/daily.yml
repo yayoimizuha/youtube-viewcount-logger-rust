@@ -8,12 +8,12 @@ env:
   ACCESS_TOKEN_SECRET: ${{secrets.ACCESS_TOKEN_SECRET}}
   API_KEY: ${{secrets.API_KEY}}
   API_SECRET: ${{secrets.API_SECRET}}
-  YTV3_API_KEY: ${{secrets.YTV3_API_KEY}}
   DEBUG: NO
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_CREDENTIAL }}
-  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   TZ: 'Asia/Tokyo'
+  RUST_BACKTRACE: 'full'
 
 
 
