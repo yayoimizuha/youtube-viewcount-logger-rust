@@ -92,4 +92,4 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-$( uuidgen )
+          key: ${{ runner.os }}-cargo-${{ steps.uuid.outputs.uuid }}
