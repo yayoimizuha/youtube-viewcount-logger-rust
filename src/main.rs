@@ -9,10 +9,6 @@ use anyhow::{anyhow, Context};
 use chrono::FixedOffset;
 use cron::Schedule;
 use futures::future::join_all;
-use google_generative_ai_rs::v1::{api, gemini};
-use google_generative_ai_rs::v1::gemini::{Content, Model, Part, Role};
-use google_generative_ai_rs::v1::gemini::request::{GenerationConfig, SafetySettings};
-use google_generative_ai_rs::v1::gemini::safety::{HarmBlockThreshold, HarmCategory};
 use once_cell::sync::Lazy;
 use url::Url;
 use reqwest::Client;
@@ -21,7 +17,7 @@ use sqlx::types::chrono::Utc;
 use tokio::sync::OnceCell;
 use chrono::format::SecondsFormat;
 use duckdb::{params, Connection};
-use youtube_viewcount_logger_rust::{struct_title, SongInfo};
+use youtube_viewcount_logger_rust::struct_title;
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
