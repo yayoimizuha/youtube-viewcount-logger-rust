@@ -21,6 +21,7 @@ use sqlx::types::chrono::Utc;
 use tokio::sync::OnceCell;
 use chrono::format::SecondsFormat;
 use duckdb::{params, Connection};
+use youtube_viewcount_logger_rust::{struct_title, SongInfo};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -58,7 +59,7 @@ impl VideoData {
             None => { Err(anyhow!("not valid JSON.")) }
             Some(dat) => {
                 println!("{}", dat);
-                if dat["items"].as_array().unwrap().is_empty() {
+                if dat["items"].as_array().ok_or(anyhow!("Parse error."))?.is_empty() {
                     return Err(anyhow!("movie info is not available"));
                 }
                 let title = dat["items"][0]["snippet"]["title"].as_str().context("title string not available.")?.to_owned();
@@ -71,11 +72,13 @@ impl VideoData {
                     executor.execute("UPDATE __title__ SET raw_title = ?,cleaned_title = NULL, structured_title = NULL WHERE youtube_id = ?",
                                      params![&title,self.video_id.clone()])?;
                 }
+
+
                 let structured_title = match executor.prepare("SELECT structured_title FROM __title__ WHERE youtube_id = ?")?
                     .query_map(params![self.video_id.clone()], |row| { Ok(row.get::<_, Option<String>>(0).unwrap()) })?
                     .filter_map(|v| v.ok()).next() {
                     Some(Some(structured_title)) => {
-                        structured_title
+                        serde_json::from_str(&structured_title)?
                     }
                     _ => {
                         let mut gemini_cache: String = "".to_owned();
@@ -83,73 +86,25 @@ impl VideoData {
                         let gemini_cache_value: Value = serde_json::from_str(gemini_cache.as_str())?;
                         match gemini_cache_value.get(&title) {
                             None => {
-                                let llm = api::Client::new_from_model(Model::Custom("gemini-2.0-flash-001".to_owned()), GOOGLE_API_KEY.clone());
-                                let query = gemini::request::Request {
-                                    contents: vec![
-                                        Content {
-                                            role: Role::User,
-                                            parts: vec![Part {
-                                                text: Some(format!(r##"以下にYouTubeタイトルが与えられるので、YouTubeタイトルから楽曲名と歌手、バージョン、エディションをJSON形式で{{"song_name":"XXXXX","singer":["AAAAA","BBBB"],"edition":"CCCCC","version":"DDDDD"}}というフォーマットで出力しなさい。Markdownのコードブロックは使わないこと。
-楽曲名は、以下のルールに従って加工しなさい。
-・それぞれの項目に関する文字列がなかった場合、空白にすること。
-・楽曲名の読み仮名は、楽曲名から除きなさい。
-・英訳があった場合は楽曲名に含めてはいけない。
-・バージョン(例:Ver.やversionやver等)に関する文字列があった場合、それをバージョンに含めなさい。
-・バージョンに関する文字列がなかった場合、バージョンは空文字とすること。
-・エディションや動画に関する文字列があった場合それをエディションに含めなさい。
-・Promotion EditやMVやMusic Videoなどの単語があった場合、エディションは空文字にしなさい。
-・エディションや動画に関する文字列がなかった場合、エディションは空文字とすること。
-
-
-{title}"##)),
-                                                inline_data: None,
-                                                file_data: None,
-                                                video_metadata: None,
-                                            }],
-                                        }
-                                    ],
-                                    tools: vec![],
-                                    safety_settings: vec![
-                                        SafetySettings { category: HarmCategory::HarmCategoryHarassment, threshold: HarmBlockThreshold::BlockNone },
-                                        SafetySettings { category: HarmCategory::HarmCategoryHateSpeech, threshold: HarmBlockThreshold::BlockNone },
-                                        SafetySettings { category: HarmCategory::HarmCategorySexuallyExplicit, threshold: HarmBlockThreshold::BlockNone },
-                                        SafetySettings { category: HarmCategory::HarmCategoryDangerousContent, threshold: HarmBlockThreshold::BlockNone },
-                                    ],
-                                    generation_config: Some(GenerationConfig {
-                                        temperature: Some(0.0),
-                                        top_p: Some(1.0),
-                                        top_k: Some(1),
-                                        candidate_count: None,
-                                        max_output_tokens: Some(1024),
-                                        stop_sequences: None,
-                                        response_mime_type: Some("application/json".to_owned()),
-                                        response_schema: None,
-                                    }),
-                                    system_instruction: None,
-                                };
-                                let llm_resp = llm.post(30, &query).await?.rest().unwrap();
-                                println!("{:?}", llm_resp.candidates[0]);
-                                // println!("{:#?}", query);
-                                llm_resp.candidates.get(0).ok_or(anyhow!(format!("llm_resp format is wrong.\n{:#?}",llm_resp.clone())))?
-                                    .clone().content.parts.get(0).unwrap().clone().text.unwrap()
+                                struct_title(title.clone()).await?
                             }
-                            Some(v) => { serde_json::to_string_pretty(v)? }
+                            Some(v) => { serde_json::from_value(v.clone())? }
                         }
                     }
                 };
-                executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![&structured_title,self.video_id.clone()])?;
+                executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![serde_json::to_string(&structured_title)?,self.video_id.clone()])?;
                 executor.execute("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?", params![{
-                        let v: Value = serde_json::from_str(structured_title.as_str())?;
-                        let song_name = match v["song_name"].as_str().unwrap().to_owned().as_str() {
+                        // let v: Value = serde_json::from_str(structured_title.as_str())?;
+                        let song_name = match structured_title.song_name.as_str(){
                             "" => { None }
                             x => { Some(x.to_owned()) }
                         };
-                        let singer = v["singer"].as_array().unwrap().into_iter().map(|v| { v.as_str().unwrap().to_owned() }).collect::<Vec<_>>().join(",");
-                        let edition = match v["edition"].as_str().unwrap().to_owned().as_str() {
+                        let singer = structured_title.singer.join(",");
+                        let edition = match structured_title.edition.as_str() {
                             "" => { None }
                             x => { Some(x.to_owned()) }
                         };
-                        let version = match v["version"].as_str().unwrap().to_owned().as_str() {
+                        let version = match structured_title.version.as_str() {
                             "" => { None }
                             x => { Some(x.to_owned()) }
                         };
@@ -157,11 +112,10 @@ impl VideoData {
                             .into_iter().filter_map(|v| { v }).collect::<Vec<_>>().join(" - ").as_str() {
                             "" => { None }
                             x => { Some(x.to_owned()) }
-                        }]
-                            .into_iter().filter_map(|v| { v }).collect::<Vec<_>>().join(" : ")
+                        }].into_iter().filter_map(|v| { v }).collect::<Vec<_>>().join(" : ")
                     },self.video_id.clone()])?;
 
-                let view_count = dat["items"][0]["statistics"]["viewCount"].as_str().unwrap().parse::<i64>().context("viewCount not available.")?.to_owned();
+                let view_count = dat["items"][0]["statistics"]["viewCount"].as_str().ok_or(anyhow!("Parse error."))?.parse::<i64>().context("viewCount not available.")?.to_owned();
                 Ok(VideoData { video_id: self.video_id.clone(), title: Some(title.clone()), views: Some(view_count.clone()) })
             }
         }
