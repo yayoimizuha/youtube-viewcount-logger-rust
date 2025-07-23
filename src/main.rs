@@ -1,22 +1,22 @@
-use std::env;
+use anyhow::{anyhow, Context};
+use chrono::format::SecondsFormat;
+use chrono::FixedOffset;
+use cron::Schedule;
+use duckdb::{params, Connection};
+use futures::future::join_all;
+use once_cell::sync::Lazy;
+use reqwest::Client;
+use serde_json::Value;
+use sqlx::types::chrono::Utc;
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::str::FromStr;
 use std::time::Duration;
-use anyhow::{anyhow, Context};
-use chrono::FixedOffset;
-use cron::Schedule;
-use futures::future::join_all;
-use once_cell::sync::Lazy;
-use url::Url;
-use reqwest::Client;
-use serde_json::Value;
-use sqlx::types::chrono::Utc;
 use tokio::sync::OnceCell;
-use chrono::format::SecondsFormat;
-use duckdb::{params, Connection};
+use url::Url;
 use youtube_viewcount_logger_rust::struct_title;
 
 #[derive(Debug, Default, Clone)]
@@ -88,6 +88,7 @@ impl VideoData {
                         }
                     }
                 };
+                println!("structured title @ {}:{}", self.video_id.clone(), serde_json::to_string(&structured_title)?);
                 executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![serde_json::to_string(&structured_title)?,self.video_id.clone()])?;
                 executor.execute("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?", params![{
                         // let v: Value = serde_json::from_str(structured_title.as_str())?;

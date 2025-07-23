@@ -110,6 +110,6 @@ pub async fn struct_title(title: String) -> Result<SongInfo, Error> {
     let text = response_text["candidates"][0]["content"]["parts"][0]["text"]
         .as_str().ok_or(anyhow!(""))?;
     let song_info: SongInfo = serde_json::from_str(text)?;
-    // println!("{:?}", song_info);
+    println!("{:?}", song_info);
     Ok(song_info)
 }
