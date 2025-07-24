@@ -24,6 +24,7 @@ pub struct SongInfo {
 
 
 pub async fn struct_title(title: String) -> Result<SongInfo, Error> {
+    println!("Use gemini to extract song title from: {}", title);
     if title == "" { return Ok(SongInfo::default()); }
     let gemini_api_key =
         env::var("GOOGLE_API_KEY").expect("Please set environment variable GOOGLE_API_KEY");
