@@ -1,4 +1,4 @@
-use anyhow::{anyhow,  Error};
+use anyhow::{anyhow, Error};
 use chrono::format::SecondsFormat;
 use chrono::FixedOffset;
 use cron::Schedule;
@@ -17,7 +17,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use url::Url;
-use youtube_viewcount_logger_rust::{struct_title, SongInfo};
+use youtube_viewcount_logger_rust::{struct_title, StructedSongTitle};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -98,11 +98,16 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
         .query_map(params![video_data.video_id], |row| {
             Ok(row.get::<_, Option<String>>(0).unwrap())
         })?.filter_map(|v| v.ok()).next().unwrap() {
-        None => { struct_title(video_data.title.clone().unwrap_or("".to_owned())).await.unwrap_or(SongInfo::default()) }
-        Some(val) => { serde_json::from_str::<_>(val.as_str()).unwrap_or(SongInfo::default()) }
+        None => { struct_title(video_data.title.clone().unwrap_or("".to_owned())).await.ok() }
+        Some(val) => { serde_json::from_str::<_>(val.as_str()).ok() }
     };
 
-
+    let structured_title = match structured_title {
+        None => {
+            return Err(anyhow!("structured title is not available for {:?}", video_data))
+        }
+        Some(title) => title,
+    };
     println!("structured title @ {}:{}", video_data.video_id.clone(), serde_json::to_string(&structured_title)?);
     executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![serde_json::to_string(&structured_title)?,video_data.video_id.clone()])?;
     executor.execute("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?", params![{
@@ -225,7 +230,15 @@ async fn main() {
     let all_videos = lookup_table.iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
 
     let all_videos_data = join_all(all_videos.into_iter().map(|video| { video.clone().get_data(&duckdb, client.clone()) })).await
-        .into_iter().filter_map(|v| { v.ok() }).collect::<Vec<_>>();
+        .into_iter().filter_map(|v1| {
+        match &v1 {
+            Ok(_) => {}
+            Err(err) => {
+                eprintln!("Error fetching video data: {}", err);
+            }
+        }
+        v1.ok()
+    }).collect::<Vec<_>>();
 
     for video_data in all_videos_data {
         for (_, group) in &mut lookup_table {
