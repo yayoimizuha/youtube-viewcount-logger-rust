@@ -14,7 +14,7 @@ static SYSTEM_PROMPT: &str = r##"以下にYouTubeタイトルが与えられる�
 ・楽曲名・歌手の英訳は含めない。
 ・version(例:Ver.やversionやver等)に関する文字列があった場合、それをversionに含めなさい。"##;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct SongInfo {
     pub song_name: String,
     pub singer: Vec<String>,
@@ -22,7 +22,9 @@ pub struct SongInfo {
     pub version: String,
 }
 
+
 pub async fn struct_title(title: String) -> Result<SongInfo, Error> {
+    if title == "" { return Ok(SongInfo::default()); }
     let gemini_api_key =
         env::var("GOOGLE_API_KEY").expect("Please set environment variable GOOGLE_API_KEY");
     let model_id = "gemini-2.5-flash";
@@ -110,6 +112,6 @@ pub async fn struct_title(title: String) -> Result<SongInfo, Error> {
     let text = response_text["candidates"][0]["content"]["parts"][0]["text"]
         .as_str().ok_or(anyhow!(""))?;
     let song_info: SongInfo = serde_json::from_str(text)?;
-    println!("{:?}", song_info);
+    println!("extract song title by {} :{:?}", model_id, song_info);
     Ok(song_info)
 }

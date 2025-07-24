@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context, Error};
 use chrono::format::SecondsFormat;
 use chrono::FixedOffset;
 use cron::Schedule;
@@ -15,9 +15,11 @@ use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::str::FromStr;
 use std::time::Duration;
+use futures::StreamExt;
+use tokio::io::AsyncBufReadExt;
 use tokio::sync::OnceCell;
 use url::Url;
-use youtube_viewcount_logger_rust::struct_title;
+use youtube_viewcount_logger_rust::{struct_title, SongInfo};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -39,58 +41,73 @@ impl PartialEq for VideoData {
 }
 impl Eq for VideoData {}
 
+
 impl VideoData {
     async fn get_data(
         self,
         executor: &Connection,
         client: Client,
-    ) -> Result<VideoData, anyhow::Error>
+    ) -> Result<VideoData, Error>
     {
         executor.execute("INSERT OR IGNORE INTO __title__(youtube_id) VALUES (?)", params![self.video_id.clone()])?;
         match youtube_data_api_v3::<Value>("videos".to_owned(), HashMap::from([
             ("part", "statistics,snippet"),
             ("fields", "items(snippet/title,statistics/viewCount)"),
             ("id", format!("{}", self.video_id).as_str())
-        ].map(|(t1, t2)| { (t1.to_owned(), t2.to_owned()) })), client).await {
+        ].map(|(t1/**/, t2)| { (t1.to_owned(), t2.to_owned()) })), client).await {
             None => { Err(anyhow!("not valid JSON.")) }
             Some(dat) => {
                 println!("{}", dat);
                 if dat["items"].as_array().ok_or(anyhow!("Parse error."))?.is_empty() {
                     return Err(anyhow!("movie info is not available"));
                 }
-                let title = dat["items"][0]["snippet"]["title"].as_str().context("title string not available.")?.to_owned();
-                if match executor.prepare("SELECT raw_title FROM __title__ WHERE youtube_id = ?")?
-                    .query_map(params![self.video_id.clone()], |row| { Ok(row.get::<_, Option<String>>(0).unwrap()) })?
-                    .filter_map(|v| v.ok()).next() {
-                    Some(Some(db_title)) => { db_title != title }
-                    _ => { true }
-                } {
-                    executor.execute("UPDATE __title__ SET raw_title = ?,cleaned_title = NULL, structured_title = NULL WHERE youtube_id = ?",
-                                     params![&title,self.video_id.clone()])?;
-                }
 
-
-                let structured_title = match executor.prepare("SELECT structured_title FROM __title__ WHERE youtube_id = ?")?
-                    .query_map(params![self.video_id.clone()], |row| { Ok(row.get::<_, Option<String>>(0).unwrap()) })?
-                    .filter_map(|v| v.ok()).next() {
-                    Some(Some(structured_title)) => {
-                        serde_json::from_str(&structured_title)?
-                    }
-                    _ => {
-                        let mut gemini_cache: String = "".to_owned();
-                        File::open("gemini-cache.json")?.read_to_string(&mut gemini_cache)?;
-                        let gemini_cache_value: Value = serde_json::from_str(gemini_cache.as_str())?;
-                        match gemini_cache_value.get(&title) {
-                            None => {
-                                struct_title(title.clone()).await?
-                            }
-                            Some(v) => { serde_json::from_value(v.clone())? }
-                        }
-                    }
+                let video_data = VideoData {
+                    video_id: self.video_id,
+                    title: dat["items"][0]["snippet"]["title"].as_str().map(|v| v.to_owned()),
+                    views: dat["items"][0]["statistics"]["viewCount"].as_str().map(|v| i64::from_str(v).unwrap()),
                 };
-                println!("structured title @ {}:{}", self.video_id.clone(), serde_json::to_string(&structured_title)?);
-                executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![serde_json::to_string(&structured_title)?,self.video_id.clone()])?;
-                executor.execute("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?", params![{
+
+                register_title(&executor, video_data.clone()).await?;
+                Ok(video_data)
+            }
+        }
+    }
+}
+
+async fn register_title(executor: &Connection, video_data: VideoData) -> Result<(), Error> {
+    match executor.prepare("SELECT raw_title FROM __title__ WHERE youtube_id = ?")?
+        .query_map(params![video_data.video_id], |row| {
+            Ok(row.get::<_, Option<String>>(0).unwrap())
+        })?.filter_map(|v| v.ok()).next() {
+        None => {
+            executor.execute("INSERT INTO __title__(youtube_id,raw_title,cleaned_title,structured_title) VALUES (?,?,NULL,NULL)",
+                             params![video_data.video_id, video_data.title.clone().unwrap_or("".to_owned())])?;
+        }
+        Some(value) => {
+            if match value {
+                None => { true }
+                Some(title) => { title != video_data.title.clone().unwrap_or("".to_owned()) }
+            } {
+                executor.execute("UPDATE __title__ SET raw_title = ?,cleaned_title = NULL, structured_title = NULL WHERE youtube_id = ?",
+                                 params![video_data.title.clone().unwrap_or("".to_owned()),video_data.video_id])?;
+            }
+        }
+    }
+
+
+    let structured_title = match executor.prepare("SELECT structured_title FROM __title__ WHERE youtube_id = ?")?
+        .query_map(params![video_data.video_id], |row| {
+            Ok(row.get::<_, Option<String>>(0).unwrap())
+        })?.filter_map(|v| v.ok()).next().unwrap() {
+        None => { struct_title(video_data.title.clone().unwrap_or("".to_owned())).await.unwrap_or(SongInfo::default()) }
+        Some(val) => { serde_json::from_str::<_>(val.as_str()).unwrap_or(SongInfo::default()) }
+    };
+
+
+    println!("structured title @ {}:{}", video_data.video_id.clone(), serde_json::to_string(&structured_title)?);
+    executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![serde_json::to_string(&structured_title)?,video_data.video_id.clone()])?;
+    executor.execute("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?", params![{
                         // let v: Value = serde_json::from_str(structured_title.as_str())?;
                         let song_name = match structured_title.song_name.as_str(){
                             "" => { None }
@@ -110,13 +127,8 @@ impl VideoData {
                             "" => { None }
                             x => { Some(x.to_owned()) }
                         }].into_iter().filter_map(|v| { v }).collect::<Vec<_>>().join(" : ")
-                    },self.video_id.clone()])?;
-
-                let view_count = dat["items"][0]["statistics"]["viewCount"].as_str().ok_or(anyhow!("Parse error."))?.parse::<i64>().context("viewCount not available.")?.to_owned();
-                Ok(VideoData { video_id: self.video_id.clone(), title: Some(title.clone()), views: Some(view_count.clone()) })
-            }
-        }
-    }
+                    },video_data.video_id.clone()])?;
+    Ok(())
 }
 
 static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
