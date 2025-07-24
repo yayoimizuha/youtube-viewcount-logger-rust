@@ -17,7 +17,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use url::Url;
-use youtube_viewcount_logger_rust::{struct_title, StructedSongTitle};
+use youtube_viewcount_logger_rust::struct_title;
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
