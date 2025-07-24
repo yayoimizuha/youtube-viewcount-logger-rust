@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow,  Error};
 use chrono::format::SecondsFormat;
 use chrono::FixedOffset;
 use cron::Schedule;
@@ -15,8 +15,6 @@ use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::str::FromStr;
 use std::time::Duration;
-use futures::StreamExt;
-use tokio::io::AsyncBufReadExt;
 use tokio::sync::OnceCell;
 use url::Url;
 use youtube_viewcount_logger_rust::{struct_title, SongInfo};
