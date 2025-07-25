@@ -69,6 +69,9 @@ jobs:
       - name: Compress data
         run: zstd data.duckdb --ultra -22 -f
 
+      - name: Register date
+        run: date +'%Y-%m-%d %H:%M:%S' > date.txt
+
       - name: Commit changes
         run: |
           git lfs install
@@ -79,7 +82,7 @@ jobs:
           git config --global user.name "${GITHUB_ACTOR}"
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git status
-          git add data.duckdb.zst -f
+          git add data.duckdb.zst date.txt -f
           git commit -m "Daily update @ $(date +'%Y-%m-%d %H:%M:%S')"
           git push origin HEAD:${GITHUB_REF} -f
 
