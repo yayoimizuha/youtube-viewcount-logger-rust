@@ -15,7 +15,7 @@ use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::str::FromStr;
 use std::time::Duration;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, Semaphore};
 use url::Url;
 use youtube_viewcount_logger_rust::struct_title;
 
@@ -66,7 +66,12 @@ impl VideoData {
                     views: dat["items"][0]["statistics"]["viewCount"].as_str().map(|v| i64::from_str(v).unwrap()),
                 };
 
-                register_title(&executor, video_data.clone()).await?;
+                match register_title(&executor, video_data.clone()).await {
+                    Ok(_) => {}
+                    Err(v) => {
+                        eprintln!("Error registering title: {}", v);
+                    }
+                };
                 Ok(video_data)
             }
         }
@@ -98,7 +103,13 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
         .query_map(params![video_data.video_id], |row| {
             Ok(row.get::<_, Option<String>>(0).unwrap())
         })?.filter_map(|v| v.ok()).next().unwrap() {
-        None => { struct_title(video_data.title.clone().unwrap_or("".to_owned())).await.ok() }
+        None => {
+            let _ = GEMINI_SEMAPHORE.get().unwrap().acquire().await?;
+            let title = struct_title(video_data.title.clone().unwrap_or("".to_owned())).await.ok();
+            // tokio sleep 10 sec.
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            title
+        }
         Some(val) => { serde_json::from_str::<_>(val.as_str()).ok() }
     };
 
@@ -137,6 +148,8 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
 static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
 static TODAY: OnceCell<String> = OnceCell::const_new();
 static LIST_MAX_RESULTS: usize = 50;
+
+static GEMINI_SEMAPHORE: OnceCell<Semaphore> = OnceCell::const_new();
 async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: String, param: HashMap<String, String>, client: Client) -> Option<T> {
     let mut param = param;
     param.insert("key".to_owned(), GOOGLE_API_KEY.clone());
@@ -164,6 +177,9 @@ async fn main() {
         let a = a.unwrap_or(Utc::now());
         a.with_timezone(&FixedOffset::east_opt(3600 * 9).unwrap()).to_rfc3339_opts(SecondsFormat::AutoSi, true).replace("T", " ").chars().take(19).collect::<String>()
     }).await;
+    GEMINI_SEMAPHORE.get_or_init(|| async {
+        Semaphore::new(5)
+    }).await;
     let mut duckdb = Connection::open("data.duckdb").unwrap();
     println!("{}", TODAY.get().unwrap());
 
@@ -176,7 +192,7 @@ async fn main() {
         lookup_table.insert(key, HashSet::new());
     });
     for (table_name, table_data) in lookup_table.iter_mut() {
-        for video_id in duckdb.prepare("SELECT name FROM pragma_table_info(?);").unwrap()
+        for video_id in duckdb.prepare("SELECT name FROM pragma_table_info(?) WHERE name <> 'index';").unwrap()
             .query_map([table_name], |row| { Ok(row.get::<_, String>(0).unwrap()) })
             .unwrap().filter_map(|v| v.ok()) {
             table_data.insert(VideoData { video_id, ..Default::default() });
