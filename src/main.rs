@@ -4,7 +4,6 @@ use chrono::FixedOffset;
 use cron::Schedule;
 use duckdb::{params, Connection};
 use futures::future::join_all;
-use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde_json::Value;
 use sqlx::types::chrono::Utc;
@@ -16,14 +15,14 @@ use std::io::Read;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::{OnceCell, Semaphore};
-use url::Url;
-use youtube_viewcount_logger_rust::struct_title;
+use youtube_viewcount_logger_rust::{struct_title, youtube_data_api_v3};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
     video_id: String,
     title: Option<String>,
     views: Option<i64>,
+    published_at: Option<String>,
 }
 
 impl Hash for VideoData {
@@ -50,7 +49,7 @@ impl VideoData {
         executor.execute("INSERT OR IGNORE INTO __title__(youtube_id) VALUES (?)", params![self.video_id.clone()])?;
         match youtube_data_api_v3::<Value>("videos".to_owned(), HashMap::from([
             ("part", "statistics,snippet"),
-            ("fields", "items(snippet/title,statistics/viewCount)"),
+            ("fields", "items(snippet/(title,publishedAt),statistics/viewCount)"),
             ("id", format!("{}", self.video_id).as_str())
         ].map(|(t1/**/, t2)| { (t1.to_owned(), t2.to_owned()) })), client).await {
             None => { Err(anyhow!("not valid JSON.")) }
@@ -64,6 +63,7 @@ impl VideoData {
                     video_id: self.video_id,
                     title: dat["items"][0]["snippet"]["title"].as_str().map(|v| v.to_owned()),
                     views: dat["items"][0]["statistics"]["viewCount"].as_str().map(|v| i64::from_str(v).unwrap()),
+                    published_at: dat["items"][0]["snippet"]["publishedAt"].as_str().map(|v| v.to_owned()),
                 };
 
                 match register_title(&executor, video_data.clone()).await {
@@ -83,21 +83,25 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
         .query_map(params![video_data.video_id], |row| {
             Ok(row.get::<_, Option<String>>(0).unwrap())
         })?.filter_map(|v| v.ok()).next() {
+        // raw_title is NULL
+        // or not exists
         None => {
             executor.execute("INSERT INTO __title__(youtube_id,raw_title,cleaned_title,structured_title) VALUES (?,?,NULL,NULL)",
-                             params![video_data.video_id, video_data.title.clone().unwrap_or("".to_owned())])?;
+                             params![video_data.video_id, video_data.title.clone()])?;
         }
+        // raw_title is existing and not NULL
         Some(value) => {
             if match value {
                 None => { true }
                 Some(title) => { title != video_data.title.clone().unwrap_or("".to_owned()) }
             } {
                 executor.execute("UPDATE __title__ SET raw_title = ?,cleaned_title = NULL, structured_title = NULL WHERE youtube_id = ?",
-                                 params![video_data.title.clone().unwrap_or("".to_owned()),video_data.video_id])?;
+                                 params![video_data.title.clone(),video_data.video_id])?;
             }
         }
     }
 
+    executor.execute("UPDATE __title__ SET published_at = ? WHERE youtube_id = ?", params![video_data.published_at, video_data.video_id])?;
 
     let structured_title = match executor.prepare("SELECT structured_title FROM __title__ WHERE youtube_id = ?")?
         .query_map(params![video_data.video_id], |row| {
@@ -105,10 +109,17 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
         })?.filter_map(|v| v.ok()).next().unwrap() {
         None => {
             let _ = GEMINI_SEMAPHORE.get().unwrap().acquire().await?;
-            let title = struct_title(video_data.title.clone().unwrap_or("".to_owned())).await.ok();
-            // tokio sleep 10 sec.
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            title
+            match video_data.title {
+                None => {
+                    None
+                }
+                Some(ref title) => {
+                    let title = struct_title(title.clone()).await.ok();
+                    // tokio sleep 10 sec.
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    title
+                }
+            }
         }
         Some(val) => { serde_json::from_str::<_>(val.as_str()).ok() }
     };
@@ -145,17 +156,11 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
     Ok(())
 }
 
-static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
 static TODAY: OnceCell<String> = OnceCell::const_new();
 static LIST_MAX_RESULTS: usize = 50;
 
 static GEMINI_SEMAPHORE: OnceCell<Semaphore> = OnceCell::const_new();
-async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: String, param: HashMap<String, String>, client: Client) -> Option<T> {
-    let mut param = param;
-    param.insert("key".to_owned(), GOOGLE_API_KEY.clone());
-    let query_url = Url::parse_with_params(format!("https://www.googleapis.com/youtube/v3/{api_path}").as_str(), param.into_iter().collect::<Vec<_>>()).unwrap();
-    client.get(query_url).send().await.unwrap().json::<T>().await.ok()
-}
+
 #[tokio::main]
 async fn main() {
     TODAY.get_or_init(|| async {

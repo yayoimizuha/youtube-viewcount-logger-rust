@@ -1,9 +1,15 @@
+use std::collections::HashMap;
 use anyhow::{anyhow, Error};
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
 use std::str::FromStr;
+use once_cell::sync::Lazy;
+use reqwest::Client;
+use url::Url;
+
+static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
 
 static SYSTEM_PROMPT: &str = r##"以下にYouTubeタイトルが与えられるので、YouTubeタイトルからsong_nameとsinger,version,editionをJSON形式で出力しなさい。
 以下のルールを守って出力すること。
@@ -54,12 +60,11 @@ pub struct StructedSongTitle {
 pub async fn struct_title(title: String) -> Result<StructedSongTitle, Error> {
     println!("Use gemini to extract song title from: {}", title);
     if title == "" { return Err(anyhow!("Input string is empty!")); }
-    let gemini_api_key =
-        env::var("GOOGLE_API_KEY").expect("Please set environment variable GOOGLE_API_KEY");
+
     let model_id = "gemini-2.5-flash";
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-        model_id, gemini_api_key
+        model_id, GOOGLE_API_KEY.clone()
     );
 
     // リクエストボディの構築
@@ -150,4 +155,11 @@ pub async fn struct_title(title: String) -> Result<StructedSongTitle, Error> {
     };
     // println!("extract song title by {} :{:?}", model_id, song_info);
     Ok(song_info)
+}
+
+pub async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_path: String, param: HashMap<String, String>, client: Client) -> Option<T> {
+    let mut param = param;
+    param.insert("key".to_owned(), GOOGLE_API_KEY.clone());
+    let query_url = Url::parse_with_params(format!("https://www.googleapis.com/youtube/v3/{api_path}").as_str(), param.into_iter().collect::<Vec<_>>()).unwrap();
+    client.get(query_url).send().await.unwrap().json::<T>().await.ok()
 }
