@@ -49,7 +49,7 @@ impl VideoData {
         executor.execute("INSERT OR IGNORE INTO __title__(youtube_id) VALUES (?)", params![self.video_id.clone()])?;
         match youtube_data_api_v3::<Value>("videos".to_owned(), HashMap::from([
             ("part", "statistics,snippet"),
-            ("fields", "items(snippet/(title,publishedAt),statistics/viewCount)"),
+            ("fields", "items(snippet(title,publishedAt),statistics/viewCount)"),
             ("id", format!("{}", self.video_id).as_str())
         ].map(|(t1/**/, t2)| { (t1.to_owned(), t2.to_owned()) })), client).await {
             None => { Err(anyhow!("not valid JSON.")) }
