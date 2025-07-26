@@ -14,7 +14,7 @@ async fn main() {
     let rust_db = Connection::open("data.duckdb").unwrap();
 
     rust_db.execute_batch("CREATE TABLE __source__ (playlist_key TEXT PRIMARY KEY NOT NULL,db_key TEXT NOT NULL,hashtag TEXT NOT NULL,screen_name TEXT NOT NULL,is_tweet INTEGER NOT NULL);").unwrap();
-    rust_db.execute_batch("CREATE TABLE __title__ (youtube_id TEXT PRIMARY KEY NOT NULL,raw_title TEXT,cleaned_title TEXT,structured_title TEXT);").unwrap();
+    rust_db.execute_batch("CREATE TABLE __title__ (youtube_id TEXT PRIMARY KEY NOT NULL,raw_title TEXT,cleaned_title TEXT,structured_title TEXT,published_at TIMESTAMPTZ);").unwrap();
 
     let table_names = sqlx::query_as("SELECT tbl_name FROM sqlite_master WHERE type = 'table';")
         .fetch_all(&mut py_db).await.unwrap().iter().map(|(tbl_name, ): &(String,)| tbl_name.to_owned()).collect::<Vec<_>>();
