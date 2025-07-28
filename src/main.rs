@@ -101,7 +101,7 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
         }
     }
 
-    executor.execute("UPDATE __title__ SET published_at = ? WHERE youtube_id = ?", params![video_data.video_id,video_data.published_at])?;
+    executor.execute("UPDATE __title__ SET published_at = ? WHERE youtube_id = ?", params![video_data.published_at,video_data.video_id])?;
 
     let structured_title = match executor.prepare("SELECT structured_title FROM __title__ WHERE youtube_id = ?")?
         .query_map(params![video_data.video_id], |row| {
