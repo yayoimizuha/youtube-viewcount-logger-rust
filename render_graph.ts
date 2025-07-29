@@ -20,12 +20,12 @@ const duckdb_connection = await duckdb_instance.connect();
 const echarts_instance = echarts.init(null, null, {
     renderer: 'svg',
     ssr: true,
-    width: 4000,
-    height: 2500
+    width: 1920,
+    height: 1080
 });
 
-for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,"__") AND NOT ENDS_WITH(table_name,"__");')).getRows())) {
-    // if (table_name != 'BEYOOOOONDS') continue
+for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
+    if (table_name != 'BEYOOOOONDS') continue
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
@@ -62,8 +62,8 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 formatter(value, _index, _extra) {
                     return moment(value).format('YYYY/MM/DD');
                 },
+                rotate: 30
             }
-
         },
         yAxis: {
             min: 0,
