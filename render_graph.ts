@@ -11,6 +11,9 @@ import * as echarts from 'npm:echarts';
 import {EChartsOption, SeriesOption} from 'npm:echarts';
 import moment from 'npm:moment';
 import * as fs from 'node:fs';
+import {createCanvas} from 'npm:@napi-rs/canvas';
+import {Resvg} from 'npm:@resvg/resvg-js'
+
 
 const duckdb_instance = await DuckDBInstance.create('data.duckdb');
 
@@ -59,8 +62,16 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         }
     })))
     const chart_option: EChartsOption = {
+        textStyle: {
+            fontFamily: defaultFont.fontFamily
+        },
+        animation: false,
         title: {
-            left:'center',
+            left: 'center',
+            textStyle: {
+                fontFamily: defaultFont.fontFamily,
+                fontSize: defaultFont.fontSize * 1.5
+            },
             text: (await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0)!.at(0)!.toString() || '',
         },
         backgroundColor: bgColor,
@@ -87,6 +98,22 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             align: 'left',
             right: 20,
             top: 20,
+            textStyle: {
+                fontSize: defaultFont.fontSize * .8,
+                fontFamily: defaultFont.fontFamily
+            },
+            formatter(name) {
+                let postfix = '';
+                const canvas = createCanvas(1, 1);
+                const ctx = canvas.getContext('2d');
+                ctx.font = `${defaultFont.fontSize * .8}px ${defaultFont.fontFamily}`;
+                while (ctx.measureText(name + postfix).width > 300) {
+                    postfix = '...'
+                    name = [...name].slice(0, name.length - 1).join('')
+                    // console.log('name:', name)
+                }
+                return name + postfix
+            },
             pageIconColor: bgColor,
             pageIconInactiveColor: bgColor,
             pageTextStyle: {
@@ -105,9 +132,15 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         series: series
     }
     chart_option && echarts_instance.setOption(chart_option);
-
-    const chart_svg = echarts_instance.renderToSVGString()
-    fs.writeFileSync(`${table_name}.svg`, chart_svg);
+    // const chart_svg = echarts_instance.renderToSVGString()
+    const chart_png = (new Resvg(echarts_instance.renderToSVGString(), {
+        fitTo: {
+            mode: 'zoom',
+            value: 2
+        }
+    })).render().asPng()
+    fs.writeFileSync(`${table_name}.png`, chart_png);
+    // fs.writeFileSync(`${table_name}.svg`, chart_svg);
 
 
     echarts_instance.clear();
