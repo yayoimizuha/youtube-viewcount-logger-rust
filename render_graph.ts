@@ -32,7 +32,8 @@ const echarts_instance = echarts.init(null, null, {
 });
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
-    // if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。')) continue
+    // if (table_name != '小片リサ') continue
+    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。')) continue
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
@@ -49,7 +50,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         }
     }));
     const series: SeriesOption[] = await Promise.all(column_names.slice(1).map((async (column_name) => {
-        const title = (((await (await duckdb_connection.run('SELECT cleaned_title FROM __title__ WHERE youtube_id = ? AND cleaned_title IS NOT NULL', [column_name])).getRows()).at(0) || column_name).at(0) || column_name).toString() || column_name;
+        const title = (((await (await duckdb_connection.run('SELECT cleaned_title FROM __title__ WHERE youtube_id = ? AND cleaned_title IS NOT NULL', [column_name])).getRows()).at(0) || [column_name]).at(0) || column_name).toString() || column_name;
         return ({
             name: title || '',
             type: 'line',
@@ -78,7 +79,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 fontFamily: defaultFont.fontFamily,
                 fontSize: defaultFont.fontSize * 1.5
             },
-            text: (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || '').at(0) || '').toString() || '',
+            text: (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string,
         },
         backgroundColor: bgColor,
         dataset: {
