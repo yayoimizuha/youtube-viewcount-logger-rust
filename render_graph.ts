@@ -21,8 +21,9 @@ const duckdb_connection = await duckdb_instance.connect();
 
 const bgColor: echarts.Color = '#FFFFFF';
 const defaultFont = {
-    fontFamily: 'Noto Sans JP,Noto Sans',
+    fontFamily: 'BIZ UDPゴシック',
     fontSize: 20,
+    fontWeight: 'Regular'
 }
 const echarts_instance = echarts.init(null, null, {
     renderer: 'svg',
@@ -33,7 +34,7 @@ const echarts_instance = echarts.init(null, null, {
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
     // if (table_name != '小片リサ') continue
-    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。')) continue
+    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'rosychronicle')) continue
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
@@ -66,12 +67,14 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 width: .8,
                 dashOffset: 2
             },
-            connectNulls: true
+            connectNulls: true,
+
         } as SeriesOption)
     })))
     const chart_option: EChartsOption = {
         textStyle: {
-            fontFamily: defaultFont.fontFamily
+            fontFamily: defaultFont.fontFamily,
+            fontSize: defaultFont.fontSize,
         },
         animation: false,
         title: {
@@ -96,7 +99,8 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 },
                 rotate: 30,
                 fontSize: defaultFont.fontSize * .8,
-                fontFamily: defaultFont.fontFamily
+                fontFamily: defaultFont.fontFamily,
+                fontWeight: 'normal'
             },
         },
         grid: {
@@ -117,8 +121,9 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 let postfix = '';
                 const canvas = createCanvas(1, 1);
                 const ctx = canvas.getContext('2d');
-                ctx.font = `Regular ${defaultFont.fontSize * .8}px ${defaultFont.fontFamily}`;
-                while (ctx.measureText(name + postfix).width > 300) {
+                ctx.font = `${defaultFont.fontSize * .8}pt ${defaultFont.fontFamily} ${defaultFont.fontWeight}`;
+                // console.log(ctx.font)
+                while (ctx.measureText(name + postfix).width > 350) {
                     postfix = '...'
                     name = [...name].slice(0, name.length - 1).join('')
                     // console.log('name:', name)
@@ -142,7 +147,8 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                         return `${Math.floor(value / 10000)}万回`
                     }
                 },
-                rotate: 30
+                rotate: 30,
+                fontSize: defaultFont.fontSize * .7
             }
         },
         series: series
@@ -153,7 +159,13 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         fitTo: {
             mode: 'zoom',
             value: 2
-        }
+        },
+        font: {
+            fontFiles: ['./assets/BIZUDPGothic-Regular.ttf'],
+            loadSystemFonts: false,
+            defaultFontFamily: 'BIZ UDPゴシック',
+        },
+        logLevel: 'info'
     })).render().asPng()
     fs.writeFileSync(`${table_name}.png`, chart_png);
     // fs.writeFileSync(`${table_name}.svg`, echarts_instance.renderToSVGString());
