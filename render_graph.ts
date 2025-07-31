@@ -65,7 +65,8 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 type: 'solid',
                 width: .8,
                 dashOffset: 2
-            }
+            },
+            connectNulls: true
         } as SeriesOption)
     })))
     const chart_option: EChartsOption = {
