@@ -21,9 +21,8 @@ const duckdb_connection = await duckdb_instance.connect();
 
 const bgColor: echarts.Color = '#f0f0f0';
 const defaultFont = {
-    fontFamily: 'Noto Sans JP',
+    fontFamily: '"Noto Sans JP DemiLight","Noto Sans JP DemiLight"',
     fontSize: 20,
-    fontWeight: 'Regular'
 }
 const echarts_instance = echarts.init(null, null, {
     renderer: 'svg',
@@ -100,13 +99,14 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             top: 20,
             textStyle: {
                 fontSize: defaultFont.fontSize * .8,
-                fontFamily: defaultFont.fontFamily
+                fontFamily: defaultFont.fontFamily,
             },
             formatter(name) {
                 let postfix = '';
                 const canvas = createCanvas(1, 1);
                 const ctx = canvas.getContext('2d');
-                ctx.font = `${defaultFont.fontSize * .8}px ${defaultFont.fontFamily}`;
+                ctx.font = `DemiLight ${defaultFont.fontSize * .8}px Noto Sans JP`;
+                console.log(ctx.font);
                 while (ctx.measureText(name + postfix).width > 300) {
                     postfix = '...'
                     name = [...name].slice(0, name.length - 1).join('')
