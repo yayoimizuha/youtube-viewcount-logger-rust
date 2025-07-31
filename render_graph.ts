@@ -9,7 +9,7 @@ import {
 } from 'npm:@duckdb/node-api';
 import * as echarts from 'npm:echarts';
 import {EChartsOption, SeriesOption} from 'npm:echarts';
-import moment from 'npm:moment';
+import dayjs from 'npm:dayjs';
 import * as fs from 'node:fs';
 import {createCanvas} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
@@ -19,9 +19,9 @@ const duckdb_instance = await DuckDBInstance.create('data.duckdb');
 
 const duckdb_connection = await duckdb_instance.connect();
 
-const bgColor: echarts.Color = '#f0f0f0';
+const bgColor: echarts.Color = '#FFFFFF';
 const defaultFont = {
-    fontFamily: '"Noto Sans JP DemiLight","Noto Sans JP DemiLight"',
+    fontFamily: 'Noto Sans JP,Noto Sans',
     fontSize: 20,
 }
 const echarts_instance = echarts.init(null, null, {
@@ -32,7 +32,7 @@ const echarts_instance = echarts.init(null, null, {
 });
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
-    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。')) continue
+    // if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。')) continue
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
@@ -49,16 +49,23 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         }
     }));
     const series: SeriesOption[] = await Promise.all(column_names.slice(1).map((async (column_name) => {
-        const title = (await (await duckdb_connection.run('SELECT cleaned_title FROM __title__ WHERE youtube_id = ?', [column_name])).getRows()).at(0)!.at(0)!.toString();
-        return {
+        const title = (((await (await duckdb_connection.run('SELECT cleaned_title FROM __title__ WHERE youtube_id = ? AND cleaned_title IS NOT NULL', [column_name])).getRows()).at(0) || column_name).at(0) || column_name).toString() || column_name;
+        return ({
             name: title || '',
             type: 'line',
             smooth: true,
             encode: {
                 x: 'index',
                 y: column_name
+            },
+            symbol: 'circle',
+            symbolSize: 2.5,
+            lineStyle: {
+                type: 'solid',
+                width: .8,
+                dashOffset: 2
             }
-        }
+        } as SeriesOption)
     })))
     const chart_option: EChartsOption = {
         textStyle: {
@@ -71,7 +78,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 fontFamily: defaultFont.fontFamily,
                 fontSize: defaultFont.fontSize * 1.5
             },
-            text: (await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0)!.at(0)!.toString() || '',
+            text: (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || '').at(0) || '').toString() || '',
         },
         backgroundColor: bgColor,
         dataset: {
@@ -82,10 +89,13 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             type: 'time',
             axisLabel: {
                 formatter(value, _index, _extra) {
-                    return moment(value).format('YYYY/MM/DD');
+                    const date = dayjs(value)
+                    return `${date.format('YYYY').padStart(4, ' ')}/${date.format('M').padStart(2, ' ')}/${date.format('D').padStart(2, ' ')}`
                 },
-                rotate: 30
-            }
+                rotate: 30,
+                fontSize: defaultFont.fontSize * .8,
+                fontFamily: defaultFont.fontFamily
+            },
         },
         grid: {
             right: 400,
@@ -105,8 +115,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 let postfix = '';
                 const canvas = createCanvas(1, 1);
                 const ctx = canvas.getContext('2d');
-                ctx.font = `DemiLight ${defaultFont.fontSize * .8}px Noto Sans JP`;
-                console.log(ctx.font);
+                ctx.font = `Regular ${defaultFont.fontSize * .8}px ${defaultFont.fontFamily}`;
                 while (ctx.measureText(name + postfix).width > 300) {
                     postfix = '...'
                     name = [...name].slice(0, name.length - 1).join('')
@@ -125,8 +134,13 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             position: 'left',
             axisLabel: {
                 formatter(value: number) {
-                    return `${Math.floor(value / 10000)}万回`
-                }
+                    if (value == 0) {
+                        return '0回'
+                    } else {
+                        return `${Math.floor(value / 10000)}万回`
+                    }
+                },
+                rotate: 30
             }
         },
         series: series
@@ -140,6 +154,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         }
     })).render().asPng()
     fs.writeFileSync(`${table_name}.png`, chart_png);
+    // fs.writeFileSync(`${table_name}.svg`, echarts_instance.renderToSVGString());
     // fs.writeFileSync(`${table_name}.svg`, chart_svg);
 
 
