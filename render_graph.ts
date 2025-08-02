@@ -1,4 +1,4 @@
-// noinspection SqlNoDataSourceInspection
+// noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
 import {
     // configurationOptionDescriptions,
@@ -179,3 +179,5 @@ duckdb_connection.closeSync()
 duckdb_instance.closeSync()
 echarts_instance.clear()
 echarts_instance.dispose()
+
+// SELECT T.youtube_id,T.cleaned_title,CAST(CAST(TT.value AS REAL) / EXTRACT(DAY FROM (NOW() - T.published_at)) AS INT) AS average_daily_views FROM __title__ AS T JOIN (SELECT name,value FROM (UNPIVOT 'アンジュルム' ON * EXCLUDE('index')) WHERE index = (SELECT MAX(index) FROM 'アンジュルム')) AS TT ON T.youtube_id = TT.name ORDER BY average_daily_views DESC LIMIT 20;
