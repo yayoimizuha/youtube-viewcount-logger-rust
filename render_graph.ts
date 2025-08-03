@@ -8,7 +8,7 @@ import {
     // DuckDBValue
 } from 'npm:@duckdb/node-api';
 import * as echarts from 'npm:echarts';
-import {EChartsOption, SeriesOption} from 'npm:echarts';
+import {EChartsOption, LineSeriesOption} from 'npm:echarts';
 import dayjs from 'npm:dayjs';
 import * as fs from 'node:fs';
 import {createCanvas} from 'npm:@napi-rs/canvas';
@@ -19,12 +19,15 @@ const duckdb_instance = await DuckDBInstance.create('data.duckdb');
 
 const duckdb_connection = await duckdb_instance.connect();
 
-const bgColor: echarts.Color = '#FFFFFF';
+const bgColor: echarts.Color = '#ffffff';
 const defaultFont = {
     fontFamily: 'BIZ UDPゴシック',
     fontSize: 20,
     fontWeight: 'Regular'
 }
+
+const graph_limit = 35;
+
 const echarts_instance = echarts.init(null, null, {
     renderer: 'svg',
     ssr: true,
@@ -34,11 +37,11 @@ const echarts_instance = echarts.init(null, null, {
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
     // if (table_name != '小片リサ') continue
-    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'rosychronicle')) continue
+    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'ochanorma')) continue
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
-    console.log(column_names);
+    console.log(JSON.stringify(column_names));
     let max_count: number = -Infinity;
     const data = (await (await duckdb_connection.run('SELECT * FROM query_table(?)', [table_name])).getRows()).map(row => row.map(v => {
         if (v instanceof DuckDBTimestampTZValue) {
@@ -50,7 +53,35 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             return null
         }
     }));
-    const series: SeriesOption[] = await Promise.all(column_names.slice(1).map((async (column_name) => {
+    const series_index = (await (await duckdb_connection.run(`
+        WITH ranked_views AS (SELECT video_id, views, "index" AS timestamp, ROW_NUMBER() OVER(PARTITION BY video_id ORDER BY "index" DESC) AS rn
+        FROM (UNPIVOT query_table(?) ON * EXCLUDE ("index") INTO NAME video_id VALUE views)
+        WHERE views IS NOT NULL
+            )
+            , ranked_daily_views AS (
+        SELECT t.cleaned_title, t.published_at, rv1.video_id, rv1.views AS total_views, CASE WHEN rv2.views IS NULL THEN (rv1.views:: DOUBLE / NULLIF (EPOCH(rv1.timestamp - t.published_at), 0))
+            ELSE ((rv1.views - rv2.views):: DOUBLE / NULLIF (EPOCH(rv1.timestamp - rv2.timestamp), 0))
+            END * 86400 AS daily_views
+        FROM ranked_views AS rv1
+            LEFT JOIN ranked_views AS rv2
+        ON rv1.video_id = rv2.video_id AND rv2.rn = 2
+            JOIN __title__ AS t ON rv1.video_id = t.youtube_id
+        WHERE rv1.rn = 1
+            )
+            , final_scores AS (
+        SELECT *, ((daily_views - AVG (daily_views) OVER()) / NULLIF (STDDEV_POP(daily_views) OVER(), 0) * 10) AS daily_views_deviation_score, ((EPOCH(published_at) - EPOCH(MIN (published_at) OVER())) / NULLIF (EPOCH(NOW()) - EPOCH(MIN (published_at) OVER()), 0) * 20) AS recency_deviation_score
+        FROM ranked_daily_views
+            ), top_n_by_score AS (
+        SELECT *
+        FROM final_scores
+        ORDER BY (daily_views_deviation_score + recency_deviation_score) DESC NULLS LAST
+            LIMIT ?
+            )
+        SELECT video_id
+        FROM top_n_by_score
+        ORDER BY total_views DESC;`, [table_name, graph_limit])).getRows()).map(([v]) => v as string);
+    // console.log(series_index);
+    const raw_series: LineSeriesOption[] = await Promise.all(column_names.slice(1).map((async (column_name) => {
         const title = (((await (await duckdb_connection.run('SELECT cleaned_title FROM __title__ WHERE youtube_id = ? AND cleaned_title IS NOT NULL', [column_name])).getRows()).at(0) || [column_name]).at(0) || column_name).toString() || column_name;
         return ({
             name: title || '',
@@ -69,8 +100,12 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             },
             connectNulls: true,
 
-        } as SeriesOption)
+        } as LineSeriesOption)
     })))
+    const series = series_index.map((youtube_id) => {
+        return raw_series.find((elm) => elm?.encode?.y == youtube_id)
+    }).filter((elm) => elm != undefined);
+
     const chart_option: EChartsOption = {
         textStyle: {
             fontFamily: defaultFont.fontFamily,
