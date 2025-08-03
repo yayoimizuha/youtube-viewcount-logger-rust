@@ -13,6 +13,7 @@ import dayjs from 'npm:dayjs';
 import * as fs from 'node:fs';
 import {createCanvas} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
+import {spawnSync} from 'node:child_process';
 
 
 const duckdb_instance = await DuckDBInstance.create('data.duckdb');
@@ -37,7 +38,10 @@ const echarts_instance = echarts.init(null, null, {
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
     // if (table_name != '小片リサ') continue
-    if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'ochanorma')) continue
+    // if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'ochanorma')) continue
+    if ((table_name != '鈴木愛理') && (table_name != 'Buono!')) continue
+
+    const title = (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string;
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
@@ -118,7 +122,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 fontFamily: defaultFont.fontFamily,
                 fontSize: defaultFont.fontSize * 1.5
             },
-            text: (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string,
+            text: title,
         },
         backgroundColor: bgColor,
         dataset: {
@@ -208,11 +212,67 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
 
 
     echarts_instance.clear();
+
+    const typst_array = (await (await duckdb_connection.run(
+        `WITH ranked_views AS (SELECT video_id,
+                                      views,
+                                      "index" AS timestamp, ROW_NUMBER() OVER(PARTITION BY video_id ORDER BY "index" DESC) AS rn
+         FROM
+             (UNPIVOT query_table(?) ON * EXCLUDE ("index") INTO NAME video_id VALUE views)
+         WHERE
+             views IS NOT NULL
+             )
+             , daily_metrics AS (
+         SELECT
+             t.cleaned_title, t.published_at, rv1.video_id, rv1.views AS total_views, CASE
+             WHEN rv2.views IS NULL THEN (rv1.views:: DOUBLE / NULLIF (EPOCH(rv1.timestamp - t.published_at), 0))
+             ELSE ((rv1.views - rv2.views):: DOUBLE / NULLIF (EPOCH(rv1.timestamp - rv2.timestamp), 0))
+             END * 86400 AS daily_views, CASE
+             WHEN rv2.views IS NOT NULL AND rv3.views IS NOT NULL THEN
+             (rv1.views - rv2.views) - (rv2.views - rv3.views)
+             ELSE
+             NULL
+             END AS momentum
+         FROM
+             ranked_views AS rv1
+             LEFT JOIN
+             ranked_views AS rv2
+         ON rv1.video_id = rv2.video_id AND rv2.rn = 2
+             LEFT JOIN
+             ranked_views AS rv3 ON rv1.video_id = rv3.video_id AND rv3.rn = 3
+             JOIN
+             __title__ AS t ON rv1.video_id = t.youtube_id
+         WHERE
+             rv1.rn = 1
+             )
+        SELECT COALESCE(cleaned_title,'https://youtu.be/' || video_id) AS cleaned_title,
+               total_views,
+               ROUND(daily_views)::INTEGER AS daily_views, CASE
+                                                               WHEN momentum IS NULL AND published_at >= NOW() - INTERVAL '3 DAY' THEN 'new'
+            WHEN momentum > 0 THEN 'up'
+            WHEN momentum < 0 THEN 'down'
+            WHEN momentum = 0 THEN 'equal'
+            ELSE NULL
+        END
+        AS momentum
+    FROM daily_metrics ORDER BY daily_views DESC NULLS LAST LIMIT ?;`, [table_name, 25])).getRows()).map(
+        ([title, total_views, daily_views, momentum]) => {
+            return `[#[ ${(title as string).replace(/([\[\]#@])/g, '\\$1')} ]],[#[ ${total_views as number}回 ]],[#[ ${daily_views as number}回 ]], ${(momentum as string | null) ?? '[#[N/A]]'},`
+        }).join('\n');
+    // console.log(typst_array);
+    const typst_src = fs.readFileSync("assets/template.typ", 'utf-8')
+        .replace("#let data = ()", `#let data = (${typst_array})`)
+        .replace("#let title = \"\"", `#let title = "${title}"`)
+    // execute with typst stdin
+    const res = spawnSync("typst", ["compile", "--format", "png", "--ppi", "200", "--font-path", "assets", "-", "-"], {
+        input: typst_src
+    })
+    console.log(typst_src)
+    fs.writeFileSync(`${table_name}.typ.png`, res.stdout);
+
 }
 
 duckdb_connection.closeSync()
 duckdb_instance.closeSync()
 echarts_instance.clear()
 echarts_instance.dispose()
-
-// SELECT T.youtube_id,T.cleaned_title,CAST(CAST(TT.value AS REAL) / EXTRACT(DAY FROM (NOW() - T.published_at)) AS INT) AS average_daily_views FROM __title__ AS T JOIN (SELECT name,value FROM (UNPIVOT 'アンジュルム' ON * EXCLUDE('index')) WHERE index = (SELECT MAX(index) FROM 'アンジュルム')) AS TT ON T.youtube_id = TT.name ORDER BY average_daily_views DESC LIMIT 20;
