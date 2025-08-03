@@ -1,0 +1,64 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Recompress data.duckdb.zst
+
+env:
+  TZ: 'Asia/Tokyo'
+
+permissions:
+  contents: write
+
+
+
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0' # Every Sunday at 00:00 UTC
+
+jobs:
+  crawl:
+    timeout-minutes: 30
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install DuckDB CLI
+        run: |
+          curl https://install.duckdb.org | sh
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Extract data.duckdb.zst
+        run:
+          zstd -dk -f data.duckdb.zst
+
+      - name: Export and Import data
+        run: |
+          duckdb data.duckdb "EXPORT DATABASE '_tmp';"
+          rm data.duckdb
+          duckdb data.duckdb "IMPORT DATABASE '_tmp';"
+
+      - name: Compress data
+        run: zstd data.duckdb --ultra -22 -f
+
+      - name: Register date
+        run: date +'%Y-%m-%d %H:%M:%S' > date.txt
+
+      - name: Commit changes
+        run: |
+          git lfs install
+          git lfs track data.duckdb.zst
+          git lfs track
+          git remote set-url origin https://github-actions:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}
+          git config --global core.quotepath off
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git status
+          git add data.duckdb.zst date.txt -f
+          git commit -m "Recompressed DB @ $(date +'%Y-%m-%d %H:%M:%S')"
+          git push origin HEAD:${GITHUB_REF} -f
