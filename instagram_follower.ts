@@ -1,25 +1,52 @@
 import {chromium} from 'npm:playwright';
+import * as path from 'jsr:@std/path';
 
 console.log(chromium.executablePath());
+
+try {
+    await Deno.remove(path.join(Deno.cwd(), 'playwright_data'), {recursive: true});
+} catch (e) {
+    console.error(e);
+}
+
+
 const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
         // "--headless"
-        '--user-data-dir=C:\\Users\\tomokazu\\RustroverProjects\\youtube-viewcount-logger-rust\\playwright_data',
+        '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
     ]
 }).spawn();
 
-// sleep 5 secs
-await new Promise(resolve => setTimeout(resolve, 10 * 1000));
+await new Promise(resolve => setTimeout(resolve, 2 * 1000));
 
-await (async () => {
-    const browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
-    const ctx = await browser.newContext();
-    const page = await ctx.newPage();
-    await page.goto('https://example.com');
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    await browser.close();
-})()
+const browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
+const ctx = await browser.newContext();
+const page = await ctx.newPage();
+
+page.on('request', (request) => {
+    if (request.url().includes('https://www.instagram.com/graphql/query')) {
+        request.response().then(async (response) => {
+            if (response?.ok) {
+                const json = await response.json();
+                console.log(json);
+            }
+        });
+    }
+})
+
+page.on('request', (request) => {
+    if (request.url().includes('https://www.instagram.com/api/v1/users/web_profile_info/?username=moe_kamikokuryo.official')) {
+        request.response().then(async (response) => {
+            if (response?.ok) {
+                const json = await response.json();
+                console.log(json);
+            }
+        });
+    }
+})
+await page.goto('https://www.instagram.com/moe_kamikokuryo.official/', {waitUntil: 'networkidle'});
 
 
+await browser.close();
 chromium_process.kill()
