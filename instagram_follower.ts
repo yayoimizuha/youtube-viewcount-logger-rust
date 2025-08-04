@@ -12,7 +12,7 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
 // sleep 5 secs
 await new Promise(resolve => setTimeout(resolve, 10 * 1000));
 
-(async () => {
+await (async () => {
     const browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
