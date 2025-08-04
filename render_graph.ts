@@ -57,33 +57,10 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             return null
         }
     }));
-    const series_index = (await (await duckdb_connection.run(`
-        WITH ranked_views AS (SELECT video_id, views, "index" AS timestamp, ROW_NUMBER() OVER(PARTITION BY video_id ORDER BY "index" DESC) AS rn
-        FROM (UNPIVOT query_table(?) ON * EXCLUDE ("index") INTO NAME video_id VALUE views)
-        WHERE views IS NOT NULL
-            )
-            , ranked_daily_views AS (
-        SELECT t.cleaned_title, t.published_at, rv1.video_id, rv1.views AS total_views, CASE WHEN rv2.views IS NULL THEN (rv1.views:: DOUBLE / NULLIF (EPOCH(rv1.timestamp - t.published_at), 0))
-            ELSE ((rv1.views - rv2.views):: DOUBLE / NULLIF (EPOCH(rv1.timestamp - rv2.timestamp), 0))
-            END * 86400 AS daily_views
-        FROM ranked_views AS rv1
-            LEFT JOIN ranked_views AS rv2
-        ON rv1.video_id = rv2.video_id AND rv2.rn = 2
-            JOIN __title__ AS t ON rv1.video_id = t.youtube_id
-        WHERE rv1.rn = 1
-            )
-            , final_scores AS (
-        SELECT *, ((daily_views - AVG (daily_views) OVER()) / NULLIF (STDDEV_POP(daily_views) OVER(), 0) * 10) AS daily_views_deviation_score, ((EPOCH(published_at) - EPOCH(MIN (published_at) OVER())) / NULLIF (EPOCH(NOW()) - EPOCH(MIN (published_at) OVER()), 0) * 20) AS recency_deviation_score
-        FROM ranked_daily_views
-            ), top_n_by_score AS (
-        SELECT *
-        FROM final_scores
-        ORDER BY (daily_views_deviation_score + recency_deviation_score) DESC NULLS LAST
-            LIMIT ?
-            )
-        SELECT video_id
-        FROM top_n_by_score
-        ORDER BY total_views DESC;`, [table_name, graph_limit])).getRows()).map(([v]) => v as string);
+    const series_index = (await (await duckdb_connection.run(fs.readFileSync('assets/graph_query.sql', {
+        encoding: 'utf-8',
+        flag: 'r'
+    }), [table_name, graph_limit])).getRows()).map(([v]) => v as string);
     // console.log(series_index);
     const raw_series: LineSeriesOption[] = await Promise.all(column_names.slice(1).map((async (column_name) => {
         const title = (((await (await duckdb_connection.run('SELECT cleaned_title FROM __title__ WHERE youtube_id = ? AND cleaned_title IS NOT NULL', [column_name])).getRows()).at(0) || [column_name]).at(0) || column_name).toString() || column_name;
@@ -213,61 +190,23 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
 
     echarts_instance.clear();
 
-    const typst_array = (await (await duckdb_connection.run(
-        `WITH ranked_views AS (SELECT video_id,
-                                      views,
-                                      "index" AS timestamp, ROW_NUMBER() OVER(PARTITION BY video_id ORDER BY "index" DESC) AS rn
-         FROM
-             (UNPIVOT query_table(?) ON * EXCLUDE ("index") INTO NAME video_id VALUE views)
-         WHERE
-             views IS NOT NULL
-             )
-             , daily_metrics AS (
-         SELECT
-             t.cleaned_title, t.published_at, rv1.video_id, rv1.views AS total_views, CASE
-             WHEN rv2.views IS NULL THEN (rv1.views:: DOUBLE / NULLIF (EPOCH(rv1.timestamp - t.published_at), 0))
-             ELSE ((rv1.views - rv2.views):: DOUBLE / NULLIF (EPOCH(rv1.timestamp - rv2.timestamp), 0))
-             END * 86400 AS daily_views, CASE
-             WHEN rv2.views IS NOT NULL AND rv3.views IS NOT NULL THEN
-             (rv1.views - rv2.views) - (rv2.views - rv3.views)
-             ELSE
-             NULL
-             END AS momentum
-         FROM
-             ranked_views AS rv1
-             LEFT JOIN
-             ranked_views AS rv2
-         ON rv1.video_id = rv2.video_id AND rv2.rn = 2
-             LEFT JOIN
-             ranked_views AS rv3 ON rv1.video_id = rv3.video_id AND rv3.rn = 3
-             JOIN
-             __title__ AS t ON rv1.video_id = t.youtube_id
-         WHERE
-             rv1.rn = 1
-             )
-        SELECT COALESCE(cleaned_title,'https://youtu.be/' || video_id) AS cleaned_title,
-               total_views,
-               ROUND(daily_views)::INTEGER AS daily_views, CASE
-                                                               WHEN momentum IS NULL AND published_at >= NOW() - INTERVAL '3 DAY' THEN 'new'
-            WHEN momentum > 0 THEN 'up'
-            WHEN momentum < 0 THEN 'down'
-            WHEN momentum = 0 THEN 'equal'
-            ELSE NULL
-        END
-        AS momentum
-    FROM daily_metrics ORDER BY daily_views DESC NULLS LAST LIMIT ?;`, [table_name, 25])).getRows()).map(
+    const typst_array = (await (await duckdb_connection.run(fs.readFileSync('assets/typst_table_query.sql', {
+        encoding: 'utf-8',
+        flag: 'r'
+    }), [table_name, 25])).getRows()).map(
         ([title, total_views, daily_views, momentum]) => {
-            return `[#[ ${(title as string).replace(/([\[\]#@])/g, '\\$1')} ]],[#[ ${total_views as number}回 ]],[#[ ${daily_views as number}回 ]], ${(momentum as string | null) ?? '[#[N/A]]'},`
+            return `[ #[\` ${(title as string).replace(/(`)/g, '\\$1')} \`].text ],[#[ ${total_views as number}回 ]],[#[ ${daily_views as number}回 ]], ${(momentum as string | null) ?? '[#[N/A]]'},`
         }).join('\n');
     // console.log(typst_array);
-    const typst_src = fs.readFileSync("assets/template.typ", 'utf-8')
-        .replace("#let data = ()", `#let data = (${typst_array})`)
-        .replace("#let title = \"\"", `#let title = "${title}"`)
+    const typst_src = fs.readFileSync('assets/template.typ', 'utf-8')
+        .replace('#let data = ()', `#let data = (${typst_array})`)
+        .replace('#let title = ""', `#let title = "${title}"`)
     // execute with typst stdin
-    const res = spawnSync("typst", ["compile", "--format", "png", "--ppi", "200", "--font-path", "assets", "-", "-"], {
+    const res = spawnSync('typst', ['compile', '--format', 'png', '--ppi', '200', '--font-path', 'assets', '-', '-'], {
         input: typst_src
     })
-    console.log(typst_src)
+    // console.log(typst_src)
+    console.error((new TextDecoder()).decode(res.stderr))
     fs.writeFileSync(`${table_name}.typ.png`, res.stdout);
 
 }
