@@ -1,0 +1,31 @@
+name: instagram_scraper.yml
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      date:
+        description: Date for the scraper to run
+        required: true
+        type: string
+
+jobs:
+  define_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      accounts: ${{ steps.list_accounts.outputs.accounts }}
+    steps:
+      - name: list monitored accounts
+        id: list_accounts
+        run: cargo run --release --bin instagram_scraper >> $GITHUB_OUTPUT
+
+  get_account_stats:
+    needs: define_matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        account: ${{ fromJson(needs.define_matrix.outputs.accounts) }}
+    steps:
+      - name: echo account
+        id: echo_account
+        run: |
+          echo "Account: ${{ matrix.account }}"
