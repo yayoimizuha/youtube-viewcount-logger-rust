@@ -53,4 +53,4 @@ jobs:
       - name: get account status
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
-          entrypoint: find /github/home/.cache/ms-playwright/chromium-1181
+          entrypoint: find /github/home/.cache/ms-playwright/
