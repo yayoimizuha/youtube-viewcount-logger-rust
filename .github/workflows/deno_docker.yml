@@ -3,7 +3,8 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - "instagram/**"
+      - 'instagram/**'
+      - '.github/workflows/deno_docker.yml'
   workflow_dispatch:
 
 jobs:
@@ -26,7 +27,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: '{{defaultContext}}:instagram'
+          context: './instagram/'
           file: Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/instagram-scraper:latest
