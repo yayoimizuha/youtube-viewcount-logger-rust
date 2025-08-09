@@ -40,13 +40,17 @@ jobs:
       max-parallel: 20
       matrix:
         account: ${{ fromJson(needs.define_matrix.outputs.accounts) }}
-      fail-fast: false
+      fail-fast: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
-      - name: echo ac/count
+      - name: get account status
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
           args: run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
+      - name: get account status
+        uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
+        with:
+          entrypoint: find /github/home/.cache/ms-playwright/chromium-1181
