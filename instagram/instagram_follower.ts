@@ -9,11 +9,17 @@ try {
     console.error(e);
 }
 
+if (Deno.args.length != 1) {
+    console.error('Usage: deno run --allow-all instagram_follower.ts username');
+    Deno.exit(1);
+}
+const username = Deno.args[0];
+
 
 const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
-        // "--headless"
+        "--headless",
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
     ]
 }).spawn();
@@ -36,7 +42,7 @@ page.on('request', (request) => {
 })
 
 page.on('request', (request) => {
-    if (request.url().includes('https://www.instagram.com/api/v1/users/web_profile_info/?username=moe_kamikokuryo.official')) {
+    if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
         request.response().then(async (response) => {
             if (response?.ok) {
                 const json = await response.json();
@@ -45,7 +51,7 @@ page.on('request', (request) => {
         });
     }
 })
-await page.goto('https://www.instagram.com/moe_kamikokuryo.official/', {waitUntil: 'networkidle'});
+await page.goto(`https://www.instagram.com/${username}/`, {waitUntil: 'networkidle'});
 
 
 await browser.close();

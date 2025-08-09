@@ -37,10 +37,15 @@ jobs:
     needs: define_matrix
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 20
       matrix:
         account: ${{ fromJson(needs.define_matrix.outputs.accounts) }}
     steps:
-      - name: echo account
-        id: echo_account
-        run: |
-          echo "Account: ${{ matrix.account }}"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: echo ac/count
+        uses: ghcr.io/yayoimizuha/instagram-scraper:latest
+        run: | 
+          deno run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
