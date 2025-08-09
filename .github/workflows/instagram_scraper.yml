@@ -37,7 +37,7 @@ jobs:
     needs: define_matrix
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 20
+      max-parallel: 2
       matrix:
         account: ${{ fromJson(needs.define_matrix.outputs.accounts) }}
       fail-fast: true
@@ -54,4 +54,4 @@ jobs:
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
           entrypoint: bash
-          args:  -c 'mv /ms-playwright ~/.cache/ms-playwright && find /github/home/.cache/ms-playwright/'
+          args:  -c "mv /ms-playwright ~/.cache/ms-playwright && find /github/home/.cache/ms-playwright/"
