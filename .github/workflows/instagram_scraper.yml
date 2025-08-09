@@ -46,6 +46,6 @@ jobs:
         with:
           lfs: true
       - name: echo ac/count
-        uses: ghcr.io/yayoimizuha/instagram-scraper:latest
-        run: | 
-          deno run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
+        uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
+        with:
+          args: deno run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}

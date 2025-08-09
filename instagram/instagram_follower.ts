@@ -24,7 +24,7 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
     ]
 }).spawn();
 
-await new Promise(resolve => setTimeout(resolve, 2 * 1000));
+// await new Promise(resolve => setTimeout(resolve, 2 * 1000));
 
 const browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
 const ctx = await browser.newContext();
