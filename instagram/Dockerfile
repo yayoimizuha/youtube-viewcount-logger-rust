@@ -1,6 +1,6 @@
 FROM denoland/deno:ubuntu
 LABEL authors="yayoimizuha"
-
+ENV HOME=/github/home
 RUN deno run --allow-all npm:playwright@latest install chromium --with-deps
 # remove all apt chaches
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
