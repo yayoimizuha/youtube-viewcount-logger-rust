@@ -54,4 +54,4 @@ jobs:
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
           entrypoint: bash
-          args:  -c "mv /ms-playwright ~/.cache/ms-playwright && find /github/home/.cache/ms-playwright/"
+          args:  -c "mkdir -p ~/.cache && mv /ms-playwright ~/.cache/ms-playwright && find /github/home/.cache/ms-playwright/"
