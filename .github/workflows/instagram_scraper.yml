@@ -48,4 +48,4 @@ jobs:
       - name: echo ac/count
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
-          args: deno run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
+          args: run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}

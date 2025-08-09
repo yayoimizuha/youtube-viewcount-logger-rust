@@ -8,4 +8,4 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY instagram_follower.ts .
 RUN deno cache instagram_follower.ts && rm instagram_follower.ts
 
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["/usr/bin/deno"]
