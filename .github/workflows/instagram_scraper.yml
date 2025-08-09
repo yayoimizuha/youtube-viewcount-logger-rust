@@ -53,4 +53,5 @@ jobs:
       - name: get account status
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
-          entrypoint: mv /ms-playwright ~/.cache/ms-playwright && find /github/home/.cache/ms-playwright/
+          entrypoint: bash -c
+          args: 'mv /ms-playwright ~/.cache/ms-playwright && find /github/home/.cache/ms-playwright/'
