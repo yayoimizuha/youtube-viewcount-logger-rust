@@ -55,7 +55,7 @@ jobs:
       - name: get account status
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
-          args: run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
+          args: mv /ms-playwright ~/.cache/ms-playwright && deno run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
       - name: check user data
         run: |  
           cat query.json
