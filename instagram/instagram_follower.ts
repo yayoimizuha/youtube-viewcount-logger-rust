@@ -1,6 +1,7 @@
 import {chromium} from 'npm:playwright';
 import * as path from 'jsr:@std/path';
-import * as fs from 'node:fs';
+import * as fs from 'node:fs'
+import * as process from 'node:process'
 import {Browser, BrowserContext, Page} from "npm:playwright-core";
 
 console.log(chromium.executablePath());
@@ -21,10 +22,15 @@ const username = Deno.args[0];
 const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
-        // '--headless',
-        // '--no-sandbox',
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
-    ]
+    ].concat(() => {
+        switch (process.platform) {
+            default:
+                return ['--headless', '--no-sandbox'] as string[]
+            case "win32":
+                return [] as string[]
+        }
+    })
 }).spawn();
 
 // await new Promise(resolve => setTimeout(resolve, 2 * 1000));
