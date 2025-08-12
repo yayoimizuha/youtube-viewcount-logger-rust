@@ -57,10 +57,15 @@ page.on('request', (request) => {
         });
     }
 })
+
+page.on()
 page.goto(`https://www.instagram.com/${username}/`, {waitUntil: "commit"})
     .then(value => value!.body())
     .catch(reason => console.log(reason))
 
+console.log(await page.content())
+
 
 await browser.close();
 chromium_process.kill()
+
