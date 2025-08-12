@@ -42,15 +42,16 @@ const page: Page = await ctx.newPage({ignoreHTTPSErrors: true});
 
 page.on('request', (request) => {
     request.response().then(async (response) => {
-        if ((await response.headerValue('Content-Type')) == 'application/json') {
+        console.log(await response.headerValue('Content-Type'), response.url());
+        if ((await response.headerValue('Content-Type')).includes('application/json')) {
             response.json().then(
                 json => {
                     console.log(json);
-                    if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
+                    if (request.url().includes(`instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
                         console.log(json);
                         fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
                     }
-                    if (request.url().includes('https://www.instagram.com/graphql/query')) {
+                    if (request.url().includes('instagram.com/graphql/query')) {
                         console.log(json);
                         fs.writeFileSync('query.json', JSON.stringify(json, null, 2));
                     }
@@ -58,7 +59,7 @@ page.on('request', (request) => {
             ).catch(
                 reason => console.error(reason)
             )
-        } else if ((await response.headerValue('Content-Type')) == 'text/html') {
+        } else if ((await response.headerValue('Content-Type')).includes('text/html')) {
             response.text().then(
                 text => {
                     console.log(text);
@@ -71,7 +72,9 @@ page.on('request', (request) => {
     });
 })
 try {
-    const resp = await page.goto(`https://www.instagram.com/${username}/`, {timeout: 5000})
+    const resp = await page.goto(`https://www.instagram.com/${username}/`, {timeout: 20000, waitUntil: "networkidle"})
+    setTimeout(() => {
+    }, 5000)
     console.log(resp.status())
 } catch (e) {
     console.error(e)
