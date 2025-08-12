@@ -21,7 +21,7 @@ cron = { version = "*" }
 
 [profile.relwithdebinfo]
 inherits = "release"
-debug = true
+debug = false
 incremental = true
 lto = true
 opt-level = 2

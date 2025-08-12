@@ -8,8 +8,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
+
+      - name: Generate UUID
+        id: uuid
+        run:
+          echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
 
       - name: Load cargo cache
         uses: actions/cache/restore@v4
