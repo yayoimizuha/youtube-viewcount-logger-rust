@@ -64,7 +64,7 @@ jobs:
         run: zstd -dk -f data.duckdb.zst
 
       - name: Run daily crawling
-        run: cargo run --release --bin youtube-viewcount-logger-rust
+        run: cargo run --profile relwithdebinfo --bin youtube-viewcount-logger-rust
 
       - name: Compress data
         run: zstd data.duckdb --ultra -22 -f

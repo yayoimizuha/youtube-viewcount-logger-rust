@@ -30,7 +30,7 @@ jobs:
         run: wget https://github.com/yayoimizuha/youtube-viewcount-logger-python/raw/refs/heads/master/save.sqlite
 
       - name: Run migration
-        run: cargo run --release --bin migrate_duckdb
+        run: cargo run --profile relwithdebinfo --bin migrate_duckdb
 
       - name: Compress data
         run: zstd data.duckdb --ultra -22 -f
