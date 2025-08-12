@@ -56,7 +56,7 @@ jobs:
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
           entrypoint: /bin/bash
-          args: -c 'mv /ms-playwright ~/.cache/ms-playwright && deno run --allow-all instagram/instagram_stats.ts ${{ matrix.account }}'
+          args: -c "mv /ms-playwright ~/.cache/ms-playwright && deno run --allow-all instagram/instagram_stats.ts ${{ matrix.account }}"
 
       - name: check user data
         run: |  
