@@ -1,6 +1,7 @@
 import {chromium} from 'npm:playwright';
 import * as path from 'jsr:@std/path';
 import * as fs from 'jsr:@std/fs';
+import {Browser, BrowserContext, Page} from "npm:playwright-core";
 
 console.log(chromium.executablePath());
 
@@ -20,7 +21,7 @@ const username = Deno.args[0];
 const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
-        "--headless",
+        '--headless',
         '--no-sandbox',
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
     ]
@@ -28,9 +29,9 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
 
 // await new Promise(resolve => setTimeout(resolve, 2 * 1000));
 
-const browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
-const ctx = await browser.newContext();
-const page = await ctx.newPage();
+const browser: Browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
+const ctx: BrowserContext = await browser.newContext();
+const page: Page = await ctx.newPage();
 
 page.on('request', (request) => {
     if (request.url().includes('https://www.instagram.com/graphql/query')) {
@@ -56,7 +57,9 @@ page.on('request', (request) => {
         });
     }
 })
-await page.goto(`https://www.instagram.com/${username}/`, {waitUntil: 'networkidle'});
+page.goto(`https://www.instagram.com/${username}/`, {waitUntil: "commit"})
+    .then(value => value!.body())
+    .catch(reason => console.log(reason))
 
 
 await browser.close();
