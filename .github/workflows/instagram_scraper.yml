@@ -44,13 +44,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-#        with:
-#          lfs: true
-#      - name: get account status
-#        uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
-#        with:
-#          args: run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
+        with:
+          lfs: true
       - name: get account status
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
-          entrypoint: ln -s /.cache ~/.cache && find /github/home/.cache/ms-playwright/
+          args: run --allow-all instagram/instagram_follower.ts  ${{ matrix.account }}
+      - name: check user data
+        run: |  
+          cat query.json
+          cat web_profile_info.json

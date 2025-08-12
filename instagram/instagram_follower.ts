@@ -1,5 +1,6 @@
 import {chromium} from 'npm:playwright';
 import * as path from 'jsr:@std/path';
+import * as fs from 'jsr:@std/fs';
 
 console.log(chromium.executablePath());
 
@@ -36,6 +37,7 @@ page.on('request', (request) => {
             if (response?.ok) {
                 const json = await response.json();
                 console.log(json);
+                fs.writeFileSync('query.json', JSON.stringify(json, null, 2));
             }
         });
     }
@@ -47,6 +49,8 @@ page.on('request', (request) => {
             if (response?.ok) {
                 const json = await response.json();
                 console.log(json);
+                fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
+
             }
         });
     }
