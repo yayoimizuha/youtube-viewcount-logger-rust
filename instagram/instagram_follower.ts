@@ -21,6 +21,7 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
         "--headless",
+        '--no-sandbox',
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
     ]
 }).spawn();
