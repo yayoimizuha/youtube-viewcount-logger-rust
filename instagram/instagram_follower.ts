@@ -2,6 +2,7 @@ import {chromium} from 'npm:playwright';
 import * as path from 'jsr:@std/path';
 import * as fs from 'node:fs'
 import * as process from 'node:process'
+import {setTimeout} from 'node:timers/promises';
 import {Browser, BrowserContext, Page} from "npm:playwright-core";
 
 console.log(chromium.executablePath());
@@ -73,8 +74,7 @@ page.on('request', (request) => {
 })
 try {
     const resp = await page.goto(`https://www.instagram.com/${username}/`, {timeout: 20000, waitUntil: "networkidle"})
-    setTimeout(() => {
-    }, 5000)
+    await setTimeout(5000);
     console.log(resp.status())
 } catch (e) {
     console.error(e)
