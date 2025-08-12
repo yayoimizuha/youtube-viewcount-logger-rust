@@ -18,6 +18,7 @@ duckdb = { version = "*", features = ["bundled", "parquet"] }
 chrono = { version = "*" }
 cron = { version = "*" }
 unescaper = { version = "*" }
+sha2 = { version = "*" }
 
 
 [profile.relwithdebinfo]

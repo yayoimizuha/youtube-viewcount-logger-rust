@@ -61,7 +61,9 @@ jobs:
           key: ${{ runner.os }}-cargo-
 
       - name: extract zstd
-        run: zstd -dk -f data.duckdb.zst
+        run: |
+          zstd -dk -f data.duckdb.zst
+          zstd -dk -f misc.duckdb.zst
 
       - name: Run daily crawling
         run: cargo run --profile relwithdebinfo --bin youtube-viewcount-logger-rust
