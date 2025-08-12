@@ -64,12 +64,10 @@ page.on('request', (request) => {
     }
 })
 try {
-    await page.goto(`https://www.instagram.com/${username}/`, {waitUntil: "networkidle"})
+    await page.goto(`https://www.instagram.com/${username}/`, {timeout: 5000})
 } catch (e) {
     console.error(e)
 }
-
-
 
 await browser.close();
 chromium_process.kill()
