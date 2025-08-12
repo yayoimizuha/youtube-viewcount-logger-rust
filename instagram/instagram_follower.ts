@@ -39,17 +39,6 @@ const browser: Browser = await chromium.connectOverCDP('http://localhost:9222', 
 const ctx: BrowserContext = await browser.newContext({ignoreHTTPSErrors: true});
 const page: Page = await ctx.newPage({ignoreHTTPSErrors: true});
 
-page.on('request', (request) => {
-    if (request.url().includes('https://www.instagram.com/graphql/query')) {
-        request.response().then(async (response) => {
-            if (response?.ok) {
-                const json = await response.json();
-                console.log(json);
-                fs.writeFileSync('query.json', JSON.stringify(json, null, 2));
-            }
-        });
-    }
-})
 
 page.on('request', (request) => {
     request.response().then(async (response) => {
@@ -59,8 +48,12 @@ page.on('request', (request) => {
                     console.log(json);
                     if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
                         console.log(json);
+                        fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
                     }
-                    fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
+                    if (request.url().includes('https://www.instagram.com/graphql/query')) {
+                        console.log(json);
+                        fs.writeFileSync('query.json', JSON.stringify(json, null, 2));
+                    }
                 }
             ).catch(
                 reason => console.error(reason)
