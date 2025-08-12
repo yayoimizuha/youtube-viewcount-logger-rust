@@ -27,7 +27,7 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
     ].concat((() => {
         switch (process.platform) {
             default:
-                return ['--no-sandbox','--headless'] as string[]
+                return ['--no-sandbox', '--headless'] as string[]
             case "win32":
                 return [] as string[]
         }
@@ -43,7 +43,7 @@ const page: Page = await ctx.newPage({ignoreHTTPSErrors: true});
 
 page.on('request', (request) => {
     request.response().then(async (response) => {
-        console.log(await response.headerValue('Content-Type'), response.url());
+        console.log(await response.headerValue('Content-Type') || '', response.url());
         if ((await response.headerValue('Content-Type')).includes('application/json')) {
             response.json().then(
                 json => {
@@ -63,7 +63,7 @@ page.on('request', (request) => {
         } else if ((await response.headerValue('Content-Type')).includes('text/html')) {
             response.text().then(
                 text => {
-                    console.log(text);
+                    // console.log(text);
                 }
             ).catch(
                 reason => console.error(reason)
