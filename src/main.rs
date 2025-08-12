@@ -1,21 +1,14 @@
 use anyhow::{anyhow, Error};
-use chrono::format::SecondsFormat;
-use chrono::FixedOffset;
-use cron::Schedule;
 use duckdb::{params, Connection};
 use futures::future::join_all;
 use reqwest::Client;
 use serde_json::Value;
-use sqlx::types::chrono::Utc;
 use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::Read;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::{OnceCell, Semaphore};
-use youtube_viewcount_logger_rust::{struct_title, youtube_data_api_v3};
+use youtube_viewcount_logger_rust::{get_desired_date, struct_title, youtube_data_api_v3};
 
 #[derive(Debug, Default, Clone)]
 struct VideoData {
@@ -156,37 +149,18 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
     Ok(())
 }
 
-static TODAY: OnceCell<String> = OnceCell::const_new();
 static LIST_MAX_RESULTS: usize = 50;
 
 static GEMINI_SEMAPHORE: OnceCell<Semaphore> = OnceCell::const_new();
 
 #[tokio::main]
 async fn main() {
-    TODAY.get_or_init(|| async {
-        let mut github_event_path = String::new();
-        File::open(env::var("GITHUB_EVENT_PATH").unwrap()).unwrap().read_to_string(&mut github_event_path).unwrap();
-        let a = match serde_json::from_str::<Value>(github_event_path.as_str()).unwrap().get("schedule") {
-            None => { None }
-            Some(schedule) => {
-                let cron_str = format!("0 {}", schedule.as_str().unwrap().trim());
-                let sched = Schedule::from_str(cron_str.as_str()).unwrap();
-                let mut duration = 100f32;
-                while sched.after(&(Utc::now() - Duration::from_secs_f32(duration))).take_while(|&date| date < Utc::now()).count() == 0 {
-                    duration *= 1.2;
-                }
-                let date = sched.after(&(Utc::now() - Duration::from_secs_f32(duration))).next().unwrap();
-                Some(date)
-            }
-        };
-        let a = a.unwrap_or(Utc::now());
-        a.with_timezone(&FixedOffset::east_opt(3600 * 9).unwrap()).to_rfc3339_opts(SecondsFormat::AutoSi, true).replace("T", " ").chars().take(19).collect::<String>()
-    }).await;
+    let today = get_desired_date().await;
     GEMINI_SEMAPHORE.get_or_init(|| async {
         Semaphore::new(5)
     }).await;
     let mut duckdb = Connection::open("data.duckdb").unwrap();
-    println!("{}", TODAY.get().unwrap());
+    println!("{}", today);
 
     let mut lookup_table: HashMap<String, HashSet<VideoData>> = HashMap::new();
 
@@ -281,8 +255,8 @@ async fn main() {
             _ => {}
         }
 
-        println!("{}", format!(r##"INSERT OR IGNORE INTO "{}"(index) VALUES(timezone('Asia/Tokyo',TIMESTAMP '{}'));"##, &key, TODAY.get().unwrap()).as_str());
-        transaction.execute(format!(r##"INSERT OR IGNORE INTO "{}"(index) VALUES(timezone('Asia/Tokyo',TIMESTAMP '{}'));"##, &key, TODAY.get().unwrap()).as_str(), []).unwrap();
+        println!("{}", format!(r##"INSERT OR IGNORE INTO "{}"(index) VALUES(timezone('Asia/Tokyo',TIMESTAMP '{}'));"##, &key, today).as_str());
+        transaction.execute(format!(r##"INSERT OR IGNORE INTO "{}"(index) VALUES(timezone('Asia/Tokyo',TIMESTAMP '{}'));"##, &key, today).as_str(), []).unwrap();
 
         let exist_columns = transaction.prepare("SELECT name FROM pragma_table_info(?);").unwrap()
             .query_map(params![&key], |row| { Ok(row.get::<_, String>(0).unwrap()) })
@@ -298,7 +272,7 @@ async fn main() {
             match datum.views {
                 None => {}
                 Some(views) => {
-                    let query = format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=timezone('Asia/Tokyo',TIMESTAMP '{}');"##, &datum.video_id, TODAY.get().unwrap());
+                    let query = format!(r##"UPDATE "{key}" SET "{}" = ? WHERE "index"=timezone('Asia/Tokyo',TIMESTAMP '{}');"##, &datum.video_id, today);
                     println!("{}", query.replace("?", &views.to_string()));
                     transaction.execute(query.as_str(), params![views]).unwrap();
                 }

@@ -1,12 +1,17 @@
-use std::collections::HashMap;
 use anyhow::{anyhow, Error};
+use chrono::{FixedOffset, SecondsFormat, Utc};
+use cron::Schedule;
+use once_cell::sync::Lazy;
 use reqwest::header::CONTENT_TYPE;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::env;
+use std::fs::File;
+use std::io::Read;
 use std::str::FromStr;
-use once_cell::sync::Lazy;
-use reqwest::Client;
+use std::time::Duration;
 use url::Url;
 
 static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
@@ -162,4 +167,29 @@ pub async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_pa
     param.insert("key".to_owned(), GOOGLE_API_KEY.clone());
     let query_url = Url::parse_with_params(format!("https://www.googleapis.com/youtube/v3/{api_path}").as_str(), param.into_iter().collect::<Vec<_>>()).unwrap();
     client.get(query_url).send().await.unwrap().json::<T>().await.ok()
+}
+
+pub async fn get_desired_date() -> String {
+    let mut github_event_path = String::new();
+    let desired_date = match env::var("GITHUB_EVENT_PATH") {
+        Ok(env_val) => {
+            File::open(env_val).unwrap().read_to_string(&mut github_event_path).unwrap();
+            let desired_date = match serde_json::from_str::<Value>(github_event_path.as_str()).unwrap().get("schedule") {
+                None => { None }
+                Some(schedule) => {
+                    let cron_str = format!("0 {}", schedule.as_str().unwrap().trim());
+                    let sched = Schedule::from_str(cron_str.as_str()).unwrap();
+                    let mut duration = 100f32;
+                    while sched.after(&(Utc::now() - Duration::from_secs_f32(duration))).take_while(|&date| date < Utc::now()).count() == 0 {
+                        duration *= 1.2;
+                    }
+                    let date = sched.after(&(Utc::now() - Duration::from_secs_f32(duration))).next().unwrap();
+                    Some(date)
+                }
+            };
+            desired_date.unwrap_or(Utc::now())
+        }
+        Err(_) => { Utc::now() }
+    };
+    desired_date.with_timezone(&FixedOffset::east_opt(3600 * 9).unwrap()).to_rfc3339_opts(SecondsFormat::AutoSi, true).replace("T", " ").chars().take(19).collect::<String>()
 }

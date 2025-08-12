@@ -17,6 +17,7 @@ futures = { version = "*" }
 duckdb = { version = "*", features = ["bundled", "parquet"] }
 chrono = { version = "*" }
 cron = { version = "*" }
+unescaper = { version = "*" }
 
 
 [profile.relwithdebinfo]
