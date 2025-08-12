@@ -62,6 +62,8 @@ page.on('request', (request) => {
                     }
                     fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
                 }
+            ).catch(
+                reason => console.error(reason)
             )
         }
     });
