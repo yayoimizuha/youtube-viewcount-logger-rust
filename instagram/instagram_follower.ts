@@ -52,17 +52,17 @@ page.on('request', (request) => {
 })
 
 page.on('request', (request) => {
-    console.log(json);
-    if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
-        request.response().then(async (response) => {
-            if (response?.ok) {
-                const json = await response.json();
-                // console.log(json);
-                fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
-
+    request.response().then(async (response) => {
+        if (response?.ok) {
+            const json = await response.json();
+            console.log(json);
+            if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
+                console.log(json);
             }
-        });
-    }
+            fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
+
+        }
+    });
 })
 try {
     const resp = await page.goto(`https://www.instagram.com/${username}/`, {timeout: 5000})
