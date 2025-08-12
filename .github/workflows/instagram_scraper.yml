@@ -37,7 +37,7 @@ jobs:
 
       - name: list monitored accounts
         id: list_accounts
-        run: cargo run --release --bin instagram_scraper >> $GITHUB_OUTPUT
+        run: cargo run --profile relwithdebinfo --bin instagram_scraper >> $GITHUB_OUTPUT
 
   get_account_stats:
     needs: define_matrix
