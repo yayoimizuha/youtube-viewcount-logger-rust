@@ -22,6 +22,7 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
+        '--user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0"'
     ].concat((() => {
         switch (process.platform) {
             default:
