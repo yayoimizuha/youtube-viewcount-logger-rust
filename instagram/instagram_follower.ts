@@ -18,19 +18,18 @@ if (Deno.args.length != 1) {
 }
 const username = Deno.args[0];
 
-
 const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
-    ].concat(() => {
+    ].concat((() => {
         switch (process.platform) {
             default:
                 return ['--headless', '--no-sandbox'] as string[]
             case "win32":
                 return [] as string[]
         }
-    })
+    })())
 }).spawn();
 
 // await new Promise(resolve => setTimeout(resolve, 2 * 1000));
