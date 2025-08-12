@@ -36,8 +36,8 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
 // await new Promise(resolve => setTimeout(resolve, 2 * 1000));
 
 const browser: Browser = await chromium.connectOverCDP('http://localhost:9222', {timeout: 5000});
-const ctx: BrowserContext = await browser.newContext();
-const page: Page = await ctx.newPage();
+const ctx: BrowserContext = await browser.newContext({ignoreHTTPSErrors: true});
+const page: Page = await ctx.newPage({ignoreHTTPSErrors: true});
 
 page.on('request', (request) => {
     if (request.url().includes('https://www.instagram.com/graphql/query')) {
