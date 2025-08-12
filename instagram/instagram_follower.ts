@@ -53,9 +53,10 @@ page.on('request', (request) => {
 page.on('request', (request) => {
     if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
         request.response().then(async (response) => {
+            console.log(json);
             if (response?.ok) {
                 const json = await response.json();
-                console.log(json);
+                // console.log(json);
                 fs.writeFileSync('web_profile_info.json', JSON.stringify(json, null, 2));
 
             }
@@ -68,7 +69,6 @@ try {
     console.error(e)
 }
 
-console.log(await page.content())
 
 
 await browser.close();
