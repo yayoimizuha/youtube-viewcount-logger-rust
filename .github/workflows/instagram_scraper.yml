@@ -29,6 +29,12 @@ jobs:
             Cargo.lock
           key: ${{ runner.os }}-cargo-
 
+      - name: Set file timestamps
+        run: |
+          git ls-files -z | xargs -0 -n1 git log -1 --pretty=format:%cd --date=format:'%Y%m%d%H%M.%S' -- $1 | while read time file; do
+            touch -t "$time" "$file"
+          done
+
       - name: list monitored accounts
         id: list_accounts
         run: cargo run --release --bin instagram_scraper >> $GITHUB_OUTPUT
@@ -37,7 +43,7 @@ jobs:
     needs: define_matrix
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 20
+      max-parallel: 2
       matrix:
         account: ${{ fromJson(needs.define_matrix.outputs.accounts) }}
       fail-fast: true
