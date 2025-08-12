@@ -56,7 +56,7 @@ jobs:
         uses: docker://ghcr.io/yayoimizuha/instagram-scraper:latest
         with:
           entrypoint: /bin/bash
-          args: -c "mkdir -p ~/.cache && mv /ms-playwright ~/.cache/ms-playwright && deno run --allow-all $GITHUB_WORKSPACE/instagram_follower.ts ${{ matrix.account }}"
+          args: -c "mkdir -p ~/.cache && mv /ms-playwright ~/.cache/ms-playwright && deno --allow-all $GITHUB_WORKSPACE/instagram_follower.ts ${{ matrix.account }}"
 
       - name: check user data
         run: |  
