@@ -52,9 +52,9 @@ page.on('request', (request) => {
 })
 
 page.on('request', (request) => {
+    console.log(json);
     if (request.url().includes(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`)) {
         request.response().then(async (response) => {
-            console.log(json);
             if (response?.ok) {
                 const json = await response.json();
                 // console.log(json);
