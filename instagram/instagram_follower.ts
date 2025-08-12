@@ -1,6 +1,6 @@
 import {chromium} from 'npm:playwright';
 import * as path from 'jsr:@std/path';
-import * as fs from 'jsr:@std/fs';
+import * as fs from 'node:fs';
 import {Browser, BrowserContext, Page} from "npm:playwright-core";
 
 console.log(chromium.executablePath());
@@ -21,8 +21,8 @@ const username = Deno.args[0];
 const chromium_process = new Deno.Command(chromium.executablePath(), {
     args: [
         '--remote-debugging-port=9222',
-        '--headless',
-        '--no-sandbox',
+        // '--headless',
+        // '--no-sandbox',
         '--user-data-dir=' + path.join(Deno.cwd(), 'playwright_data'),
     ]
 }).spawn();
@@ -57,11 +57,11 @@ page.on('request', (request) => {
         });
     }
 })
-
-page.on()
-page.goto(`https://www.instagram.com/${username}/`, {waitUntil: "commit"})
-    .then(value => value!.body())
-    .catch(reason => console.log(reason))
+try {
+    await page.goto(`https://www.instagram.com/${username}/`, {waitUntil: "networkidle"})
+} catch (e) {
+    console.error(e)
+}
 
 console.log(await page.content())
 
