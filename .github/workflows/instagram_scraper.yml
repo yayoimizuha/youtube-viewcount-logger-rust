@@ -62,3 +62,4 @@ jobs:
         run: |  
           cat query.json
           cat web_profile_info.json
+        continue-on-error: true
