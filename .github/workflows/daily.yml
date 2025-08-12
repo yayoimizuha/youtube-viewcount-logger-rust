@@ -69,7 +69,7 @@ jobs:
         run: cargo run --profile relwithdebinfo --bin youtube-viewcount-logger-rust
 
       - name: Compress data
-        run: zstd data.duckdb --ultra -22 -f
+        run: zstd data.duckdb --ultra -22 -fk
 
       - name: Register date
         run: date +'%Y-%m-%d %H:%M:%S' > date.txt
@@ -88,6 +88,25 @@ jobs:
           git commit -m "Daily update @ $(date +'%Y-%m-%d %H:%M:%S')"
           git push origin HEAD:${GITHUB_REF} -f
 
+      - name: Run instagram scraper
+        run: cargo run --profile relwithdebinfo --bin instagram_scraper
+
+      - name: Compress misc data
+        run: zstd misc.duckdb --ultra -22 -fk
+
+      - name: Commit changes
+        run: |
+          git lfs install
+          git lfs track data.duckdb.zst
+          git lfs track
+          git remote set-url origin https://github-actions:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}
+          git config --global core.quotepath off
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git status
+          git add misc.duckdb.zst  -f
+          git commit -m "Instagram stats @ $(date +'%Y-%m-%d %H:%M:%S')"
+          git push origin HEAD:${GITHUB_REF} -f
 
       - name: Cargo cache
         uses: actions/cache/save@v4

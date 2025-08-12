@@ -56,8 +56,7 @@ async fn main() {
             }));
     }
     let client = Client::builder().user_agent(USER_AGENT).build().unwrap();
-    let futures = usernames.into_iter().map(async |username: String| -> anyhow::Result<()>{
-        println!("username:       {username}");
+    let futures = usernames.clone().into_iter().map(async |username: String| -> anyhow::Result<()>{
         let document = client.get(format!("https://www.instagram.com/{username}/embed/")).send().await?.text().await?;
         let json_start_pos = document.find("contextJSON").ok_or(anyhow!("contextJSON is not found"))? + 14;
         let json_end_pos = detect_json_end(document[json_start_pos..].to_string()).ok_or(anyhow!("The end of JSON not found"))? + json_start_pos - 1;
@@ -68,10 +67,12 @@ async fn main() {
         let profile_pic_url = json["context"]["profile_pic_url"].as_str().ok_or(anyhow!("context.profile_pic_url is not available"))?;
         let posts_count = json["context"]["posts_count"].as_u64().ok_or(anyhow!("context.posts_count is not available"))?;
 
-        println!("followers_count:{followers_count}");
-        println!("full_name:      {full_name}");
-        println!("profile_pic_url:{profile_pic_url}");
-        println!("posts_count:    {posts_count}\n\n\n");
+        println!("{}",
+                 format!("username:        {username}\n").to_owned() +
+                     format!("followers_count: {followers_count}\n").as_str() +
+                     format!("full_name:       {full_name}\n").as_str() +
+                     format!("profile_pic_url: {profile_pic_url}\n").as_str() +
+                     format!("posts_count:     {posts_count}\n\n").as_str());
         let profile_pic = client.get(profile_pic_url).send().await?.bytes().await?;
         let profile_pic_hash = Sha256::digest(profile_pic.as_ref()).iter().map(|v| { format!("{:02x}", v) }).collect::<String>();
 
@@ -81,5 +82,10 @@ async fn main() {
                        params![username,  followers_count as i64, full_name, &profile_pic_hash, posts_count as i64]).unwrap();
         Ok(())
     }).collect::<Vec<_>>();
-
+    let results = futures::future::join_all(futures).await;
+    for (result, username) in results.into_iter().zip(usernames) {
+        if let Err(e) = result {
+            eprintln!("Error: {} @ {}", e, username);
+        }
+    }
 }
