@@ -3,7 +3,7 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - 'instagram/**'
+      - 'instagram/Dockerfile'
       - '.github/workflows/deno_docker.yml'
   workflow_dispatch:
 
