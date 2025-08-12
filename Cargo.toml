@@ -23,3 +23,5 @@ cron = { version = "*" }
 inherits = "release"
 debug = true
 incremental = true
+lto = true
+opt-level = 2
