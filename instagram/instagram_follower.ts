@@ -26,7 +26,7 @@ const chromium_process = new Deno.Command(chromium.executablePath(), {
     ].concat((() => {
         switch (process.platform) {
             default:
-                return ['--headless', '--no-sandbox'] as string[]
+                return ['--no-sandbox'] as string[]
             case "win32":
                 return [] as string[]
         }
