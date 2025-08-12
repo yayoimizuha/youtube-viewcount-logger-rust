@@ -64,7 +64,8 @@ page.on('request', (request) => {
     }
 })
 try {
-    await page.goto(`https://www.instagram.com/${username}/`, {timeout: 5000})
+    const resp = await page.goto(`https://www.instagram.com/${username}/`, {timeout: 5000})
+    console.log(resp.status())
 } catch (e) {
     console.error(e)
 }
