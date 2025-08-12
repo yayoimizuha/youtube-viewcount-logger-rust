@@ -42,7 +42,7 @@ const page: Page = await ctx.newPage({ignoreHTTPSErrors: true});
 
 page.on('request', (request) => {
     request.response().then(async (response) => {
-        if (response?.ok) {
+        if ((await response.headerValue('Content-Type')) == 'application/json') {
             response.json().then(
                 json => {
                     console.log(json);
