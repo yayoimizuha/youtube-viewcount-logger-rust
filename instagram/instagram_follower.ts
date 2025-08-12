@@ -58,6 +58,15 @@ page.on('request', (request) => {
             ).catch(
                 reason => console.error(reason)
             )
+        } else if ((await response.headerValue('Content-Type')) == 'text/html') {
+            response.text().then(
+                text => {
+                    console.log(text);
+                }
+            ).catch(
+                reason => console.error(reason)
+            )
+
         }
     });
 })
