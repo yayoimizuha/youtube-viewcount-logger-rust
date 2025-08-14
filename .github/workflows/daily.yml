@@ -176,4 +176,4 @@ jobs:
           zstd -dk -f data.duckdb.zst
 
       - name: Processing tweet
-        run: deno --allow-all .\render_graph.ts
+        run: deno --allow-all render_graph.ts
