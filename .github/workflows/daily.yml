@@ -103,14 +103,13 @@ jobs:
           git config --global user.name "${GITHUB_ACTOR}"
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git status
-          git pull --rebase 
           git add data.duckdb.zst date.txt -f
           git commit -m "Daily update @ $(date +'%Y-%m-%d %H:%M:%S')"
           git push origin HEAD:${GITHUB_REF} -f
 
   instagram:
     needs:
-      - compile
+      - youtube
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -149,7 +148,6 @@ jobs:
           git config --global user.name "${GITHUB_ACTOR}"
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git status
-          git pull --rebase 
           git add misc.duckdb.zst -f
           git commit -m "Daily Instagram update @ $(date +'%Y-%m-%d %H:%M:%S')"
           git push origin HEAD:${GITHUB_REF} -f
