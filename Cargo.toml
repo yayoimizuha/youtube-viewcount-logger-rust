@@ -19,7 +19,7 @@ chrono = { version = "*" }
 cron = { version = "*" }
 unescaper = { version = "*" }
 sha2 = { version = "*" }
-
+rust_xlsxwriter = { version = "*", features = ["chrono", "default"] }
 
 [profile.relwithdebinfo]
 inherits = "release"
