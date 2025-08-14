@@ -39,12 +39,21 @@ const twitterClient = (() => {
         console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
         return null;
     }
-    return new TwitterApi({
+    const twitter_api: TwitterApi = TwitterApi({
         appKey: process.env.TWITTER_APP_KEY as string,
         appSecret: process.env.TWITTER_APP_SECRET as string,
         accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
         accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
     });
+
+    await twitter_api.v2.tweet(
+        "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
+        "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
+        "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
+        "https://viewcount-logger-20043.web.app/"
+    )
+
+    return twitter_api;
 })();
 
 const truncateToByteLength = (text, maxBytes) => {
