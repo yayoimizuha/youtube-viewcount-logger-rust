@@ -47,7 +47,9 @@ jobs:
           key: ${{ runner.os }}-cargo-
 
       - name: Compile all binaries
-        run: cargo build --profile relwithdebinfo
+        run: |
+          # cargo build --profile relwithdebinfo
+          echo `date`
 
       - name: Cargo cache
         uses: actions/cache/save@v4
