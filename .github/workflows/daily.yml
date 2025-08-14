@@ -84,7 +84,9 @@ jobs:
           zstd -dk -f data.duckdb.zst
 
       - name: Getting YouTube ViewCounts
-        run: ./target/relwithdebinfo/youtube-viewcount-logger-rust
+        run: |
+          # ./target/relwithdebinfo/youtube-viewcount-logger-rust
+          echo `date`
 
       - name: Register date
         run: date +'%Y-%m-%d %H:%M:%S' > date.txt
