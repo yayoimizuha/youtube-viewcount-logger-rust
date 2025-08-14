@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Recompress data.duckdb.zst
+name: Recompress *.duckdb.zst
 
 env:
   TZ: 'Asia/Tokyo'
@@ -37,15 +37,26 @@ jobs:
       - name: Extract data.duckdb.zst
         run:
           zstd -dk -f data.duckdb.zst
+          zstd -dk -f misc.duckdb.zst
 
-      - name: Export and Import data
+      - name: Export and Import data.duckdb
         run: |
           duckdb data.duckdb "EXPORT DATABASE '_tmp';"
           rm data.duckdb
           duckdb data.duckdb "IMPORT DATABASE '_tmp';"
+          rm -rf _tmp
+
+      - name: Export and Import misc.duckdb
+        run: |
+          duckdb misc.duckdb "EXPORT DATABASE '_tmp';"
+          rm data.duckdb
+          duckdb misc.duckdb "IMPORT DATABASE '_tmp';"
+          rm -rf _tmp
 
       - name: Compress data
-        run: zstd data.duckdb --ultra -22 -f
+        run: |
+          zstd data.duckdb --ultra -22 -f
+          zstd misc.duckdb --ultra -22 -f
 
       - name: Register date
         run: date +'%Y-%m-%d %H:%M:%S' > date.txt
@@ -60,6 +71,6 @@ jobs:
           git config --global user.name "${GITHUB_ACTOR}"
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git status
-          git add data.duckdb.zst date.txt -f
+          git add data.duckdb.zst misc.duckdb.zst date.txt -f
           git commit -m "Recompressed DB @ $(date +'%Y-%m-%d %H:%M:%S')"
           git push origin HEAD:${GITHUB_REF} -f

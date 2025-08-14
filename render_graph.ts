@@ -1,12 +1,6 @@
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
-import {
-    // configurationOptionDescriptions,
-    DuckDBInstance,
-    // version as duckdb_version,
-    DuckDBTimestampTZValue,
-    // DuckDBValue
-} from 'npm:@duckdb/node-api';
+import {DuckDBInstance, DuckDBTimestampTZValue,} from 'npm:@duckdb/node-api';
 import * as echarts from 'npm:echarts';
 import {EChartsOption, LineSeriesOption} from 'npm:echarts';
 import dayjs from 'npm:dayjs';
@@ -14,7 +8,9 @@ import * as fs from 'node:fs';
 import {createCanvas} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
 import {spawnSync} from 'node:child_process';
-
+import * as process from 'node:process';
+import {TwitterApi} from 'npm:twitter-api-v2@latest';
+import {Buffer} from 'node:buffer';
 
 const duckdb_instance = await DuckDBInstance.create('data.duckdb');
 
@@ -36,16 +32,40 @@ const echarts_instance = echarts.init(null, null, {
     height: 1080
 });
 
+// Twitter クライアント初期化 (環境変数が無い場合は null)
+const twitterClient = (() => {
+    const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
+    if (!required.every(k => process.env[k])) {
+        console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
+        return null;
+    }
+    return new TwitterApi({
+        appKey: process.env.TWITTER_APP_KEY as string,
+        appSecret: process.env.TWITTER_APP_SECRET as string,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
+        accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
+    });
+})();
+
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
     // if (table_name != '小片リサ') continue
     // if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'ochanorma')) continue
+
     if ((table_name != '鈴木愛理') && (table_name != 'Buono!')) continue
+    // if (table_name != 'アンジュルム') continue
+    const is_tweet: boolean = (await (await duckdb_connection.run('SELECT COALESCE(BOOL_OR(is_tweet::BOOLEAN),FALSE) FROM __source__ WHERE db_key = ?;', [table_name])).getRows()).map(([v]) => v as boolean)[0];
+    if (!is_tweet) {
+        // console.log(table_name, is_tweet);
+        console.log(`Skipping ${table_name} ...`);
+        continue
+    }
 
     const title = (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string;
+    const hashtag = (((await (await duckdb_connection.run('SELECT DISTINCT hashtag FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string;
 
     const column_names = (await (await duckdb_connection.run('SELECT name FROM pragma_table_info(?);', [table_name])).getRows()).map(([v]) => v as string)
     console.log(`Table: ${table_name}`);
-    console.log(JSON.stringify(column_names));
+    // console.log(JSON.stringify(column_names));
     let max_count: number = -Infinity;
     const data = (await (await duckdb_connection.run('SELECT * FROM query_table(?)', [table_name])).getRows()).map(row => row.map(v => {
         if (v instanceof DuckDBTimestampTZValue) {
@@ -118,6 +138,9 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 fontFamily: defaultFont.fontFamily,
                 fontWeight: 'normal'
             },
+            splitLine: {
+                show: true
+            }
         },
         grid: {
             right: 400,
@@ -170,7 +193,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         series: series
     }
     chart_option && echarts_instance.setOption(chart_option);
-    // const chart_svg = echarts_instance.renderToSVGString()
+
     const chart_png = (new Resvg(echarts_instance.renderToSVGString(), {
         fitTo: {
             mode: 'zoom',
@@ -183,10 +206,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         },
         logLevel: 'info'
     })).render().asPng()
-    fs.writeFileSync(`${table_name}.png`, chart_png);
-    // fs.writeFileSync(`${table_name}.svg`, echarts_instance.renderToSVGString());
-    // fs.writeFileSync(`${table_name}.svg`, chart_svg);
-
+    // fs.writeFileSync(`${table_name}.png`, chart_png);
 
     echarts_instance.clear();
 
@@ -206,9 +226,44 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         input: typst_src
     })
     // console.log(typst_src)
-    console.error((new TextDecoder()).decode(res.stderr))
-    fs.writeFileSync(`${table_name}.typ.png`, res.stdout);
+    const table_png = res.stdout;
 
+    console.error((new TextDecoder()).decode(res.stderr))
+
+    // fs.writeFileSync(`${table_name}.typ.png`, table_png);
+
+    const tweet_text = (await (await duckdb_connection.run(fs.readFileSync('assets/tweet_query.sql', {
+        encoding: 'utf-8',
+        flag: 'r'
+    }), [table_name])).getRows()).entries().map(
+        ([index, row]) => String.fromCodePoint(0x1F947 + index) + (row as string[]).join('\t')
+    ).toArray().join('\n');
+    console.log(tweet_text);
+
+    const upload_media = async (image: Buffer<ArrayBufferLike>, twitter: TwitterApi) => {
+        return await twitter.v1.uploadMedia(image, {mimeType: 'image/png'});
+    }
+
+    if (twitterClient) {
+        try {
+            const mediaIds = [] as string[];
+            try {
+                for (const image of [chart_png, table_png]) {
+                    mediaIds.push(await upload_media(Buffer.from(image), twitterClient));
+                }
+            } catch (e) {
+                console.error(`Media upload failed for ${table_name}:`, e);
+            }
+
+            await twitterClient.v2.tweet({
+                text: `#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`,
+                media: {media_ids: mediaIds as [string, string] | [string]}
+            });
+            console.log(`Tweet posted for ${table_name}`);
+        } catch (e) {
+            console.error(`Tweet failed for ${table_name}:`, e);
+        }
+    }
 }
 
 duckdb_connection.closeSync()

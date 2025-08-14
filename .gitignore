@@ -5,3 +5,4 @@ outdated_script/out.txt
 user
 frame.pickle
 .vscode
+target/**

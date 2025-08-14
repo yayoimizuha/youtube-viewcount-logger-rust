@@ -30,9 +30,7 @@ async fn main() {
 
     let duckdb = Connection::open("misc.duckdb").unwrap();
     duckdb.execute("CREATE TABLE IF NOT EXISTS instagram_accounts (id TEXT PRIMARY KEY);", params![]).unwrap();
-    // instagram_stats: profile_picをprofile_pic_hashに変更
     duckdb.execute("CREATE TABLE IF NOT EXISTS instagram_stats (date TIMESTAMPTZ, username TEXT, followers_count INT, full_name TEXT, profile_pic_hash TEXT, posts_count INT, PRIMARY KEY (date, username));", params![]).unwrap();
-    // instagram_profile_pics: 新しいテーブル
     duckdb.execute("CREATE TABLE IF NOT EXISTS instagram_profile_pics (hash TEXT PRIMARY KEY, image_blob BLOB);", params![]).unwrap();
     duckdb.execute("CREATE INDEX IF NOT EXISTS idx_instagram_stats_date ON instagram_stats (date, username);", params![]).unwrap();
 
