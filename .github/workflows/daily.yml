@@ -10,11 +10,10 @@ env:
   TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
   TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
   TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
+  GH_TOKEN: ${{ github.token }}
+
 permissions:
   contents: write
-
-
-
 
 on:
   workflow_dispatch:
@@ -47,7 +46,7 @@ jobs:
             Cargo.lock
           key: ${{ runner.os }}-cargo-
 
-      - name: Run daily crawling
+      - name: Compile all binaries
         run: cargo build --profile relwithdebinfo
 
       - name: Cargo cache
@@ -132,7 +131,7 @@ jobs:
         run: |
           zstd -dk -f misc.duckdb.zst
 
-      - name: Run daily crawling
+      - name: Getting Instagram status
         run: ./target/relwithdebinfo/instagram_scraper
 
       - name: Compress data
