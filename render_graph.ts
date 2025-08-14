@@ -9,7 +9,7 @@ import {createCanvas} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
 import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
-import {TwitterApi} from 'npm:twitter-api-v2@latest';
+import {TwitterApi} from 'npm:twitter-api-v2';
 import {Buffer} from 'node:buffer';
 
 const duckdb_instance = await DuckDBInstance.create('data.duckdb');
@@ -47,11 +47,25 @@ const twitterClient = (() => {
     });
 })();
 
+const truncateToByteLength = (text, maxBytes) => {
+    const encoder = new TextEncoder();
+    const encodedText = encoder.encode(text);
+
+    if (encodedText.length <= maxBytes) {
+        return text;
+    }
+    let truncatedText = text;
+    while (encoder.encode(truncatedText).length > maxBytes) {
+        truncatedText = truncatedText.slice(0, -1);
+    }
+    return truncatedText;
+}
+
 for (const [table_name] of (await (await duckdb_connection.run('SELECT table_name FROM information_schema.tables WHERE NOT STARTS_WITH(table_name,\'__\') AND NOT ENDS_WITH(table_name,\'__\');')).getRows())) {
     // if (table_name != '小片リサ') continue
     // if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'ochanorma')) continue
 
-    if ((table_name != '鈴木愛理') && (table_name != 'Buono!')) continue
+    // if ((table_name != '鈴木愛理') && (table_name != 'Buono!')) continue
     // if (table_name != 'アンジュルム') continue
     const is_tweet: boolean = (await (await duckdb_connection.run('SELECT COALESCE(BOOL_OR(is_tweet::BOOLEAN),FALSE) FROM __source__ WHERE db_key = ?;', [table_name])).getRows()).map(([v]) => v as boolean)[0];
     if (!is_tweet) {
@@ -236,7 +250,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         encoding: 'utf-8',
         flag: 'r'
     }), [table_name])).getRows()).entries().map(
-        ([index, row]) => String.fromCodePoint(0x1F947 + index) + (row as string[]).join('\t')
+        ([index, row]) => String.fromCodePoint(0x1F947 + index) + (row as string[]).join(' ')
     ).toArray().join('\n');
     console.log(tweet_text);
 
@@ -256,7 +270,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
             }
 
             await twitterClient.v2.tweet({
-                text: `#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`,
+                text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`, 280),
                 media: {media_ids: mediaIds as [string, string] | [string]}
             });
             console.log(`Tweet posted for ${table_name}`);

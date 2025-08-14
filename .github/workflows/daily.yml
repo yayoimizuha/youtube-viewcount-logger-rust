@@ -48,8 +48,7 @@ jobs:
 
       - name: Compile all binaries
         run: |
-          # cargo build --profile relwithdebinfo
-          echo `date`
+          cargo build --profile relwithdebinfo
 
       - name: Cargo cache
         uses: actions/cache/save@v4
@@ -87,8 +86,7 @@ jobs:
 
       - name: Getting YouTube ViewCounts
         run: |
-          # ./target/relwithdebinfo/youtube-viewcount-logger-rust
-          echo `date`
+          ./target/relwithdebinfo/youtube-viewcount-logger-rust
 
       - name: Register date
         run: date +'%Y-%m-%d %H:%M:%S' > date.txt
