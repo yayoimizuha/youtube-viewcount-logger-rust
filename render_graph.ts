@@ -33,13 +33,13 @@ const echarts_instance = echarts.init(null, null, {
 });
 
 // Twitter クライアント初期化 (環境変数が無い場合は null)
-const twitterClient = (() => {
+const twitterClient = await (async () => {
     const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
     if (!required.every(k => process.env[k])) {
         console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
         return null;
     }
-    const twitter_api: TwitterApi = TwitterApi({
+    const twitter_api: TwitterApi = new TwitterApi({
         appKey: process.env.TWITTER_APP_KEY as string,
         appSecret: process.env.TWITTER_APP_SECRET as string,
         accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
@@ -56,7 +56,7 @@ const twitterClient = (() => {
     return twitter_api;
 })();
 
-const truncateToByteLength = (text, maxBytes) => {
+const truncateToByteLength = (text:string, maxBytes:number) => {
     const encoder = new TextEncoder();
     const encodedText = encoder.encode(text);
 
