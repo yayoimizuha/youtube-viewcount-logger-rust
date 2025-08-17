@@ -1,24 +1,27 @@
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
-import {DuckDBInstance, DuckDBTimestampTZValue,} from 'npm:@duckdb/node-api';
+import { DuckDBInstance, DuckDBTimestampTZValue, } from 'npm:@duckdb/node-api';
 import * as echarts from 'npm:echarts';
-import {EChartsOption, LineSeriesOption} from 'npm:echarts';
+import { EChartsOption, LineSeriesOption } from 'npm:echarts';
 import dayjs from 'npm:dayjs';
 import * as fs from 'node:fs';
-import {createCanvas} from 'npm:@napi-rs/canvas';
-import {Resvg} from 'npm:@resvg/resvg-js'
-import {spawnSync} from 'node:child_process';
+import * as path from 'node:path';
+import { createCanvas, GlobalFonts } from 'npm:@napi-rs/canvas';
+import { Resvg } from 'npm:@resvg/resvg-js'
+import { spawnSync } from 'node:child_process';
 import * as process from 'node:process';
-import {TwitterApi} from 'npm:twitter-api-v2';
-import {Buffer} from 'node:buffer';
+import { TwitterApi } from 'npm:twitter-api-v2';
+import { Buffer } from 'node:buffer';
+
 
 const duckdb_instance = await DuckDBInstance.create('data.duckdb');
-
 const duckdb_connection = await duckdb_instance.connect();
+
+GlobalFonts.loadFontsFromDir('assets');
 
 const bgColor: echarts.Color = '#ffffff';
 const defaultFont = {
-    fontFamily: 'BIZ UDPゴシック',
+    fontFamily: 'BIZ UDPGothic',
     fontSize: 20,
     fontWeight: 'Regular'
 }
@@ -56,7 +59,7 @@ const twitterClient = await (async () => {
     return twitter_api;
 })();
 
-const truncateToByteLength = (text:string, maxBytes:number) => {
+const truncateToByteLength = (text: string, maxBytes: number) => {
     const encoder = new TextEncoder();
     const encodedText = encoder.encode(text);
 
@@ -183,9 +186,8 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
                 let postfix = '';
                 const canvas = createCanvas(1, 1);
                 const ctx = canvas.getContext('2d');
-                ctx.font = `${defaultFont.fontSize * .8}pt ${defaultFont.fontFamily} ${defaultFont.fontWeight}`;
-                // console.log(ctx.font)
-                while (ctx.measureText(name + postfix).width > 350) {
+                ctx.font = `${defaultFont.fontSize * .8}pt ${defaultFont.fontFamily}`;
+                while (ctx.measureText(name + postfix).width > 400) {
                     postfix = '...'
                     name = [...name].slice(0, name.length - 1).join('')
                     // console.log('name:', name)
@@ -225,11 +227,11 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         font: {
             fontFiles: ['./assets/BIZUDPGothic-Regular.ttf'],
             loadSystemFonts: false,
-            defaultFontFamily: 'BIZ UDPゴシック',
+            defaultFontFamily: 'BIZ UDPGothic',
         },
         logLevel: 'info'
     })).render().asPng()
-    // fs.writeFileSync(`${table_name}.png`, chart_png);
+    fs.writeFileSync(path.join(...[process.cwd(), 'debug', `${table_name}.png`]), chart_png);
 
     echarts_instance.clear();
 
@@ -264,7 +266,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
     console.log(tweet_text);
 
     const upload_media = async (image: Buffer<ArrayBufferLike>, twitter: TwitterApi) => {
-        return await twitter.v1.uploadMedia(image, {mimeType: 'image/png'});
+        return await twitter.v1.uploadMedia(image, { mimeType: 'image/png' });
     }
 
     if (twitterClient) {
@@ -280,7 +282,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
 
             await twitterClient.v2.tweet({
                 text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`, 280),
-                media: {media_ids: mediaIds as [string, string] | [string]}
+                media: { media_ids: mediaIds as [string, string] | [string] }
             });
             console.log(`Tweet posted for ${table_name}`);
         } catch (e) {

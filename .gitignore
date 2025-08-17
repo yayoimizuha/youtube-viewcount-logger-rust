@@ -6,3 +6,4 @@ user
 frame.pickle
 .vscode
 target/**
+debug/** */
