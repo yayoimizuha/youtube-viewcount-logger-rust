@@ -18,7 +18,7 @@ on:
     - cron: '0 0 * * 0' # Every Sunday at 00:00 UTC
 
 jobs:
-  crawl:
+  recompress:
     timeout-minutes: 30
 
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
           lfs: true
 
       - name: Extract data.duckdb.zst
-        run:
+        run: |
           zstd -dk -f data.duckdb.zst
           zstd -dk -f misc.duckdb.zst
 
