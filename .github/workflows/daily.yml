@@ -125,6 +125,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          ref: ${{ github.ref_name }}
 
       - name: Cargo cache
         uses: actions/cache/restore@v4
