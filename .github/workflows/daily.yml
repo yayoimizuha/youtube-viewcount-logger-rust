@@ -101,6 +101,7 @@ jobs:
         run: zstd data.duckdb --ultra -22 -fk
 
       - name: Commit changes
+        if: ${{ !github.event.inputs.DEBUG }}
         run: |
           git lfs install
           git lfs track data.duckdb.zst
@@ -146,6 +147,7 @@ jobs:
         run: zstd misc.duckdb --ultra -22 -fk
 
       - name: Commit changes
+        if: ${{ !github.event.inputs.DEBUG }}
         run: |
           git lfs install
           git lfs track misc.duckdb.zst
@@ -190,6 +192,7 @@ jobs:
         if: ${{ github.event.inputs.DEBUG }}
         uses: actions/upload-artifact@v4
         with:
+          name: 'debug-artifact'
           path: |
             './debug'
             '**.duckdb.zst'

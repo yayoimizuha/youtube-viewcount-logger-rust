@@ -278,7 +278,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         return await twitter.v1.uploadMedia(image, {mimeType: 'image/png'});
     }
 
-    if (twitterClient) {
+    if (twitterClient && !is_debug) {
         try {
             const mediaIds = [] as string[];
             try {
