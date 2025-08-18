@@ -194,5 +194,5 @@ jobs:
         with:
           name: 'debug-artifact'
           path: |
-            './debug'
-            '**.duckdb.zst'
+            debug
+            *.duckdb.zst
