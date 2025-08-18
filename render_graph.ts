@@ -35,7 +35,7 @@ const echarts_instance = echarts.init(null, null, {
     height: 1080
 });
 
-const is_debug = (process.env.DEBUG || 'true').trim().toLowerCase() == 'true'
+const is_debug = (process.env.DEBUG || 'false').trim().toLowerCase() == 'true'
 
 // Twitter クライアント初期化 (環境変数が無い場合は null)
 const twitterClient = await (async () => {

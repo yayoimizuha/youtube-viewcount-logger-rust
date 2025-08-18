@@ -190,4 +190,6 @@ jobs:
         if: ${{ github.event.inputs.DEBUG }}
         uses: actions/upload-artifact@v4
         with:
-          path: './debug'
+          path: |
+            './debug'
+            '**.duckdb.zst'
