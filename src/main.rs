@@ -4,8 +4,10 @@ use futures::future::join_all;
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::{OnceCell, Semaphore};
 use youtube_viewcount_logger_rust::{get_desired_date, struct_title, youtube_data_api_v3};
@@ -47,7 +49,7 @@ impl VideoData {
         ].map(|(t1/**/, t2)| { (t1.to_owned(), t2.to_owned()) })), client).await {
             None => { Err(anyhow!("not valid JSON.")) }
             Some(dat) => {
-                println!("{}", dat);
+                if ENABLE_DEBUG.load(Ordering::Relaxed) { println!("{}", dat); }
                 if dat["items"].as_array().ok_or(anyhow!("Parse error."))?.is_empty() {
                     return Err(anyhow!("movie info is not available"));
                 }
@@ -123,7 +125,7 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
         }
         Some(title) => title,
     };
-    println!("structured title @ {}:{}", video_data.video_id.clone(), serde_json::to_string(&structured_title)?);
+    if ENABLE_DEBUG.load(Ordering::Relaxed) { println!("structured title @ {}:{}", video_data.video_id.clone(), serde_json::to_string(&structured_title)?); }
     executor.execute("UPDATE __title__ SET structured_title = ? WHERE youtube_id = ?", params![serde_json::to_string(&structured_title)?,video_data.video_id.clone()])?;
     executor.execute("UPDATE __title__ SET cleaned_title = ? WHERE youtube_id = ?", params![{
                         // let v: Value = serde_json::from_str(structured_title.as_str())?;
@@ -152,10 +154,12 @@ async fn register_title(executor: &Connection, video_data: VideoData) -> Result<
 static LIST_MAX_RESULTS: usize = 50;
 
 static GEMINI_SEMAPHORE: OnceCell<Semaphore> = OnceCell::const_new();
+static ENABLE_DEBUG: AtomicBool = AtomicBool::new(false);
 
 #[tokio::main]
 async fn main() {
     let today = get_desired_date().await;
+    ENABLE_DEBUG.store(env::var("DEBUG").map(|v| v.trim().parse().ok().unwrap_or(false)).unwrap_or(false), Ordering::Release);
     GEMINI_SEMAPHORE.get_or_init(|| async {
         Semaphore::new(5)
     }).await;
@@ -208,7 +212,7 @@ async fn main() {
             let mut arg = playlist_items_arg.clone();
             arg.insert("playlistId".to_owned(), playlist_key.to_owned());
             arg.insert("pageToken".to_owned(), next_page_token.clone().unwrap());
-            println!("{:?}", arg);
+            if ENABLE_DEBUG.load(Ordering::Relaxed) { println!("{:?}", arg); }
             match youtube_data_api_v3::<Value>("playlistItems".to_owned(), arg, client.clone()).await {
                 None => {}
                 Some(resp) => {
