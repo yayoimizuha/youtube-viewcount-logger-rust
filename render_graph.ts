@@ -1,17 +1,17 @@
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
-import { DuckDBInstance, DuckDBTimestampTZValue, } from 'npm:@duckdb/node-api';
+import {DuckDBInstance, DuckDBTimestampTZValue,} from 'npm:@duckdb/node-api';
 import * as echarts from 'npm:echarts';
-import { EChartsOption, LineSeriesOption } from 'npm:echarts';
+import {EChartsOption, LineSeriesOption} from 'npm:echarts';
 import dayjs from 'npm:dayjs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createCanvas, GlobalFonts } from 'npm:@napi-rs/canvas';
-import { Resvg } from 'npm:@resvg/resvg-js'
-import { spawnSync } from 'node:child_process';
+import {createCanvas, GlobalFonts} from 'npm:@napi-rs/canvas';
+import {Resvg} from 'npm:@resvg/resvg-js'
+import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
-import { TwitterApi } from 'npm:twitter-api-v2';
-import { Buffer } from 'node:buffer';
+import {TwitterApi} from 'npm:twitter-api-v2';
+import {Buffer} from 'node:buffer';
 
 
 const duckdb_instance = await DuckDBInstance.create('data.duckdb');
@@ -49,12 +49,17 @@ const twitterClient = await (async () => {
         accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
     });
 
-    await twitter_api.v2.tweet(
-        "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
-        "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
-        "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
-        "https://viewcount-logger-20043.web.app/"
-    )
+    try {
+        await twitter_api.v2.tweet(
+            "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
+            "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
+            "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
+            "https://viewcount-logger-20043.web.app/"
+        )
+    } catch (e) {
+        console.error('Tweet failed for:', e);
+
+    }
 
     return twitter_api;
 })();
@@ -266,7 +271,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
     console.log(tweet_text);
 
     const upload_media = async (image: Buffer<ArrayBufferLike>, twitter: TwitterApi) => {
-        return await twitter.v1.uploadMedia(image, { mimeType: 'image/png' });
+        return await twitter.v1.uploadMedia(image, {mimeType: 'image/png'});
     }
 
     if (twitterClient) {
@@ -282,7 +287,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
 
             await twitterClient.v2.tweet({
                 text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`, 280),
-                media: { media_ids: mediaIds as [string, string] | [string] }
+                media: {media_ids: mediaIds as [string, string] | [string]}
             });
             console.log(`Tweet posted for ${table_name}`);
         } catch (e) {
