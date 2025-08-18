@@ -1,8 +1,7 @@
-
 name: Daily get UP-FRONT & Hello!Project YouTube view count
 
 env:
-#  DEBUG: NO
+  #  DEBUG: NO
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   TZ: 'Asia/Tokyo'
   RUST_BACKTRACE: 'full'
@@ -11,6 +10,7 @@ env:
   TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
   TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
   GH_TOKEN: ${{ github.token }}
+  DEBUG: ${{ github.event.inputs.DEBUG }}
 
 permissions:
   contents: write
@@ -18,11 +18,11 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-        DEBUG:
-            description: Enable debug mode
-            required: false
-            default: false
-            type: boolean
+      DEBUG:
+        description: Enable debug mode
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: '0 23 * * *'
 
@@ -185,3 +185,9 @@ jobs:
 
       - name: Processing tweet
         run: deno --allow-all render_graph.ts
+
+      - name: upload artifacts
+        if: ${{ github.event.inputs.DEBUG }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: './debug'

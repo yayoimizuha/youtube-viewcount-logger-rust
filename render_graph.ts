@@ -35,10 +35,12 @@ const echarts_instance = echarts.init(null, null, {
     height: 1080
 });
 
+const is_debug = (process.env.DEBUG || 'true').trim().toLowerCase() == 'true'
+
 // Twitter クライアント初期化 (環境変数が無い場合は null)
 const twitterClient = await (async () => {
     const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
-    if (!required.every(k => process.env[k])) {
+    if (!required.every(k => process.env[k]) && is_debug) {
         console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
         return null;
     }
@@ -85,10 +87,12 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
     // if ((table_name != '鈴木愛理') && (table_name != 'Buono!')) continue
     // if (table_name != 'アンジュルム') continue
     const is_tweet: boolean = (await (await duckdb_connection.run('SELECT COALESCE(BOOL_OR(is_tweet::BOOLEAN),FALSE) FROM __source__ WHERE db_key = ?;', [table_name])).getRows()).map(([v]) => v as boolean)[0];
-    if (!is_tweet) {
-        // console.log(table_name, is_tweet);
-        console.log(`Skipping ${table_name} ...`);
-        continue
+    if (!is_debug) {
+        if (!is_tweet) {
+            // console.log(table_name, is_tweet);
+            console.log(`Skipping ${table_name} ...`);
+            continue
+        }
     }
 
     const title = (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string;
@@ -236,7 +240,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
         },
         logLevel: 'info'
     })).render().asPng()
-    fs.writeFileSync(path.join(...[process.cwd(), 'debug', `${table_name}.png`]), chart_png);
+    fs.writeFileSync(path.join(...[process.cwd(), 'debug', `${table_name}.graph.png`]), chart_png);
 
     echarts_instance.clear();
 
@@ -260,7 +264,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT table_nam
 
     console.error((new TextDecoder()).decode(res.stderr))
 
-    // fs.writeFileSync(`${table_name}.typ.png`, table_png);
+    fs.writeFileSync(path.join(...[process.cwd(), 'debug', `${table_name}.typst.png`]), table_png);
 
     const tweet_text = (await (await duckdb_connection.run(fs.readFileSync('assets/tweet_query.sql', {
         encoding: 'utf-8',
