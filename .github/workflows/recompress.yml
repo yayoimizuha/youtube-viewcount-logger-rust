@@ -27,7 +27,7 @@ jobs:
       - name: Install DuckDB CLI
         run: |
           curl https://install.duckdb.org | sh
-          export PATH='/home/runner/.duckdb/cli/latest':$PATH
+          echo '/home/runner/.duckdb/cli/latest' >> "$GITHUB_PATH"
 
       - name: Checkout
         uses: actions/checkout@v4
