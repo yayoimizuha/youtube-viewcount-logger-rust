@@ -49,7 +49,7 @@ jobs:
       - name: Export and Import misc.duckdb
         run: |
           duckdb misc.duckdb "EXPORT DATABASE '_tmp';"
-          rm data.duckdb
+          rm misc.duckdb
           duckdb misc.duckdb "IMPORT DATABASE '_tmp';"
           rm -rf _tmp
 
