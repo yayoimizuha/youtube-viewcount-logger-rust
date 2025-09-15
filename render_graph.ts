@@ -94,6 +94,13 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
             continue
         }
     }
+    if ((((await (await duckdb_connection.run(fs.readFileSync('assets/max_daily_viewcount.sql', {
+        encoding: 'utf-8',
+        flag: 'r'
+    }), [table_name])).getRows()).at(0) || [0]).at(0) || 0) < 1000) {
+        console.log(`Too few to tweet. Skipping ${table_name} ...`);
+        continue
+    }
 
     const title = (((await (await duckdb_connection.run('SELECT DISTINCT screen_name FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string;
     const hashtag = (((await (await duckdb_connection.run('SELECT DISTINCT hashtag FROM __source__ WHERE db_key = ? ORDER BY playlist_key;', [table_name])).getRows()).at(0) || [table_name as string]).at(0) || table_name as string).toString() || table_name as string;
