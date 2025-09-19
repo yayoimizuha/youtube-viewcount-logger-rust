@@ -143,6 +143,7 @@ jobs:
 
       - name: Getting Instagram status
         run: ./target/relwithdebinfo/instagram_scraper
+        continue-on-error: true
 
       - name: Compress data
         run: zstd misc.duckdb --ultra -22 -fk
