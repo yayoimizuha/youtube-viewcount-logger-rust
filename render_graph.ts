@@ -1,6 +1,6 @@
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
-import {DuckDBInstance, DuckDBTimestampTZValue,} from 'npm:@duckdb/node-api';
+import {DuckDBInstance, DuckDBTimestampTZValue, DuckDBConnection} from 'npm:@duckdb/node-api@1.3.2-alpha.26';
 import * as echarts from 'npm:echarts';
 import {EChartsOption, LineSeriesOption} from 'npm:echarts';
 import dayjs from 'npm:dayjs';
@@ -14,8 +14,8 @@ import {TwitterApi} from 'npm:twitter-api-v2';
 import {Buffer} from 'node:buffer';
 
 
-const duckdb_instance = await DuckDBInstance.create('data.duckdb');
-const duckdb_connection = await duckdb_instance.connect();
+const duckdb_instance: DuckDBInstance = await DuckDBInstance.create('data.duckdb');
+const duckdb_connection: DuckDBConnection = await duckdb_instance.connect();
 
 GlobalFonts.loadFontsFromDir('assets');
 
@@ -94,10 +94,10 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
             continue
         }
     }
-    if ((((await (await duckdb_connection.run(fs.readFileSync('assets/max_daily_viewcount.sql', {
+    if (((((await (await duckdb_connection.run(fs.readFileSync('assets/max_daily_viewcount.sql', {
         encoding: 'utf-8',
         flag: 'r'
-    }), [table_name])).getRows()).at(0) || [0]).at(0) || 0) < 1000) {
+    }), [table_name])).getRows()).at(0) || [0]).at(0) || 0) as number) < 1000) {
         console.log(`Too few to tweet. Skipping ${table_name} ...`);
         continue
     }
@@ -269,7 +269,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
     // console.log(typst_src)
     const table_png = res.stdout;
 
-    console.error((new TextDecoder()).decode(res.stderr))
+    console.warn((new TextDecoder()).decode(res.stderr))
 
     fs.writeFileSync(path.join(...[process.cwd(), 'debug', `${table_name}.typst.png`]), table_png);
 
