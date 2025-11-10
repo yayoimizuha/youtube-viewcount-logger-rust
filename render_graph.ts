@@ -1,6 +1,7 @@
+// deno-lint-ignore-file no-unversioned-import
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
-import {DuckDBInstance, DuckDBTimestampTZValue, DuckDBConnection} from 'npm:@duckdb/node-api@1.3.2-alpha.26';
+import {DuckDBConnection, DuckDBInstance, DuckDBTimestampTZValue} from 'npm:@duckdb/node-api@1.3.2-alpha.26';
 import * as echarts from 'npm:echarts';
 import {EChartsOption, LineSeriesOption} from 'npm:echarts';
 import dayjs from 'npm:dayjs';
@@ -12,6 +13,7 @@ import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
 import {TwitterApi} from 'npm:twitter-api-v2';
 import {Buffer} from 'node:buffer';
+import twitterText from 'npm:twitter-text@3.1.0';
 
 
 const duckdb_instance: DuckDBInstance = await DuckDBInstance.create('data.duckdb');
@@ -66,18 +68,16 @@ const twitterClient = await (async () => {
     return twitter_api;
 })();
 
-const truncateToByteLength = (text: string, maxBytes: number) => {
-    const encoder = new TextEncoder();
-    const encodedText = encoder.encode(text);
-
-    if (encodedText.length <= maxBytes) {
+const truncateToByteLength = (text: string) => {
+    const parsed = twitterText.parseTweet(text);
+    if (parsed.valid) {
         return text;
+    } else {
+        return text.slice(
+            parsed.validDisplayRangeStart,
+            parsed.validDisplayRangeEnd + 1
+        )
     }
-    let truncatedText = text;
-    while (encoder.encode(truncatedText).length > maxBytes) {
-        truncatedText = truncatedText.slice(0, -1);
-    }
-    return truncatedText;
 }
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_name FROM information_schema.tables AS t1 LEFT JOIN (SELECT db_key,MIN(rowid) AS min_rowid FROM __source__ GROUP BY db_key) AS t2 ON t1.table_name = t2.db_key WHERE NOT STARTS_WITH(t1.table_name, \'__\') AND NOT ENDS_WITH(t1.table_name, \'__\') ORDER BY CASE WHEN t2.min_rowid IS NULL THEN 1 ELSE 0 END,t2.min_rowid;')).getRows())) {
@@ -279,7 +279,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
     }), [table_name])).getRows()).entries().map(
         ([index, row]) => String.fromCodePoint(0x1F947 + index) + (row as string[]).join(' ')
     ).toArray().join('\n');
-    console.log(tweet_text);
+    console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
     const upload_media = async (image: Buffer<ArrayBufferLike>, twitter: TwitterApi) => {
         return await twitter.v1.uploadMedia(image, {mimeType: 'image/png'});
@@ -297,7 +297,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
             }
 
             await twitterClient.v2.tweet({
-                text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`, 280),
+                text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`),
                 media: {media_ids: mediaIds as [string, string] | [string]}
             });
             console.log(`Tweet posted for ${table_name}`);
