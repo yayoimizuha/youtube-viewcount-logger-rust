@@ -26,7 +26,8 @@ jobs:
     steps:
       - name: Generate UUID
         id: uuid
-        run: echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
+        run:
+          echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
 
       - name: Checkout
         uses: actions/checkout@v4
