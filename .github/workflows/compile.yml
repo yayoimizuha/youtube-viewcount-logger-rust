@@ -1,0 +1,55 @@
+name: Compile Rust Binaries
+
+env:
+  RUST_BACKTRACE: 'full'
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'build.rs'
+  schedule:
+    # Run on the 1st of every month at 00:00 UTC
+    - cron: '0 0 1 * *'
+
+jobs:
+  compile:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cargo cache restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            Cargo.lock
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-
+            ${{ runner.os }}-cargo-
+
+      - name: Compile all binaries
+        run: |
+          cargo build --profile relwithdebinfo
+
+      - name: Cargo cache save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            Cargo.lock
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
