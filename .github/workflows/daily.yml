@@ -44,10 +44,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-build-
-            ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
         run: |
@@ -98,10 +95,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-build-
-            ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
         run: |
