@@ -27,47 +27,7 @@ on:
     - cron: '0 23 * * *'
 
 jobs:
-  compile:
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Generate UUID
-        id: uuid
-        run:
-          echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Cargo cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            Cargo.lock
-          key: ${{ runner.os }}-cargo-
-
-      - name: Compile all binaries
-        run: |
-          cargo build --profile relwithdebinfo
-
-      - name: Cargo cache
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            Cargo.lock
-          key: ${{ runner.os }}-cargo-${{ steps.uuid.outputs.uuid }}
   youtube:
-    needs:
-      - compile
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -84,7 +44,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
         run: |
@@ -135,7 +95,7 @@ jobs:
             ~/.cargo/git
             target
             Cargo.lock
-          key: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
         run: |
