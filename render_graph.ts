@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-unversioned-import
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
 import {DuckDBConnection, DuckDBInstance, DuckDBTimestampTZValue} from 'npm:@duckdb/node-api@1.3.2-alpha.26';
@@ -273,16 +272,18 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
 
     fs.writeFileSync(path.join(...[process.cwd(), 'debug', `${table_name}.typst.png`]), table_png);
 
-    const tweet_text = (await (await duckdb_connection.run(fs.readFileSync('assets/tweet_query.sql', {
+    const tweet_rows = await (await duckdb_connection.run(fs.readFileSync('assets/tweet_query.sql', {
         encoding: 'utf-8',
         flag: 'r'
-    }), [table_name])).getRows()).entries().map(
-        ([index, row]) => String.fromCodePoint(0x1F947 + index) + (row as string[]).join(' ')
-    ).toArray().join('\n');
+    }), [table_name])).getRows() as string[][];
+    const tweet_text = tweet_rows
+        .map((row: string[], index: number) => String.fromCodePoint(0x1F947 + index) + row.join(' '))
+        .join('\n');
     console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
-    const upload_media = async (image: Buffer<ArrayBufferLike>, twitter: TwitterApi) => {
-        return await twitter.v1.uploadMedia(image, {mimeType: 'image/png'});
+    const upload_media = async (image: Uint8Array, twitter: TwitterApi) => {
+        const buffer = Buffer.isBuffer(image) ? image : Buffer.from(image);
+        return await twitter.v1.uploadMedia(buffer, {mimeType: 'image/png'});
     }
 
     if (twitterClient && !is_debug) {

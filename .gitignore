@@ -7,3 +7,4 @@ frame.pickle
 .vscode
 target/**
 debug/** */actionlint
+debug/**/*.png

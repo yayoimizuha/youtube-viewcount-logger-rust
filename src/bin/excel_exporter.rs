@@ -82,5 +82,5 @@ async fn main() {
         worksheet.write_row_matrix(1, 1, data.clone()).unwrap();
         worksheet.add_table(0, 0, data.len() as RowNum, column_names.len() as ColNum, &Table::new().set_header_row(true)).unwrap();
     });
-    workbook.save("export.xlsx").unwrap();
+    workbook.save("workdir/export.xlsx").unwrap();
 }

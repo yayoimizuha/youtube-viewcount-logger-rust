@@ -3,8 +3,8 @@ name: Daily get UP-FRONT & Hello!Project YouTube view count
 env:
   #  DEBUG: NO
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-  TZ: 'Asia/Tokyo'
-  RUST_BACKTRACE: 'full'
+  TZ: "Asia/Tokyo"
+  RUST_BACKTRACE: "full"
   TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
   TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
   TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
   schedule:
-    - cron: '0 23 * * *'
+    - cron: "0 23 * * *"
 
 jobs:
   youtube:
@@ -159,7 +159,68 @@ jobs:
         if: ${{ github.event.inputs.DEBUG }}
         uses: actions/upload-artifact@v4
         with:
-          name: 'debug-artifact'
+          name: "debug-artifact"
           path: |
             debug
             *.duckdb.zst
+
+  release:
+    needs:
+      - youtube
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          ref: ${{ github.ref_name }}
+
+      - name: Install Typst
+        run: |
+          wget `gh release view --repo typst/typst --json assets --jq '.assets[] | select((.name | contains("x86_64")) and (.name | contains("linux"))) | .url'`
+          tar xvf `gh release view --repo typst/typst --json assets --jq '.assets[] | select((.name | contains("x86_64")) and (.name | contains("linux"))) | .name'`
+          echo $PWD/`echo $(gh release view --repo typst/typst --json assets --jq '.assets[] | select((.name | contains("x86_64")) and (.name | contains("linux"))) | .name') | cut -d '.' -f1` >> "$GITHUB_PATH"
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: extract zstd
+        run: |
+          zstd -dk -f data.duckdb.zst
+          zstd -dk -f misc.duckdb.zst
+
+      - name: Generate group report
+        run: deno --allow-all render_group_report.ts
+        continue-on-error: true
+
+      - name: Generate Excel data
+        run: |
+          ./target/relwithdebinfo/excel_exporter
+        continue-on-error: true
+
+      - name: Create daily release
+        run: |
+          if [ "${{ github.event.inputs.DEBUG }}" = "true" ]; then
+            RELEASE_TAG="debug-$(date +'%Y-%m-%d-%H%M%S')"
+            RELEASE_TITLE="[DEBUG] Daily Report $(date +'%Y-%m-%d %H:%M:%S')"
+            PRERELEASE_FLAG="--prerelease"
+          else
+            RELEASE_TAG="daily-$(date +'%Y-%m-%d')"
+            RELEASE_TITLE="Daily Report $(date +'%Y-%m-%d')"
+            PRERELEASE_FLAG=""
+            # Delete existing release with the same tag if exists (only for non-debug)
+            gh release delete "$RELEASE_TAG" --yes || true
+            git push origin --delete "$RELEASE_TAG" || true
+          fi
+
+          # Create new release with markdown body and assets
+          gh release create "$RELEASE_TAG" \
+            --title "$RELEASE_TITLE" \
+            --notes-file workdir/github_release.md \
+            $PRERELEASE_FLAG \
+            workdir/group_report.pdf \
+            data.duckdb.zst \
+            misc.duckdb.zst \
+            workdir/export.xlsx
