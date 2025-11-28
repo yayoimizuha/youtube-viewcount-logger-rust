@@ -397,7 +397,7 @@ function buildReleaseMarkdown(sections: ReleaseSection[]): string {
 function escapeMarkdownText(input: string): string {
     return input
         .replace(/\\/g, '\\\\')
-        .replace(/([`*_{}\[\]()#+\-.!|>])/g, '\\$1')
+        .replace(/([`*_{}\[\]()#+\-!|>])/g, '\\$1')
         .replace(/\s+/g, ' ');
 }
 
