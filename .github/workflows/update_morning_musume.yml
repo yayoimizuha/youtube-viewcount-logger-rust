@@ -30,7 +30,7 @@ jobs:
             - name: Update group name
               run: |
                 duckdb data.duckdb "UPDATE __source__ SET hashtag = 'モーニング娘`date +\"%y\"`' WHERE db_key = 'モーニング娘。';"
-                duckdb data.duckdb "UPDATE __source__ SET screen_name = 'モーニング娘\'`date +\"%y\"`' WHERE db_key = 'モーニング娘。';"
+                duckdb data.duckdb "UPDATE __source__ SET screen_name = 'モーニング娘''`date +\"%y\"`' WHERE db_key = 'モーニング娘。';"
 
             - name: Register date
               run: date +'%Y-%m-%d %H:%M:%S' > date.txt
