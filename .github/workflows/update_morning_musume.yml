@@ -1,0 +1,55 @@
+name: Morning Musume Group Name Updater
+
+on:
+  schedule:
+    - cron: "1 15 31 12 *"
+
+env:
+  TZ: "Asia/Tokyo"
+
+
+jobs:
+    update:
+        timeout-minutes: 10
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                lfs: true
+
+            - name: Install DuckDB CLI
+              run: |
+                curl https://install.duckdb.org | sh
+                echo '/home/runner/.duckdb/cli/latest' >> "$GITHUB_PATH"
+
+            - name: extract zstd
+              run: |
+                zstd -dk -f data.duckdb.zst
+
+            - name: Update group name
+              run: |
+                duckdb data.duckdb "UPDATE __source__ SET hashtag = 'モーニング娘`date +\"%y\"`' WHERE db_key = 'モーニング娘。';"
+                duckdb data.duckdb "UPDATE __source__ SET screen_name = 'モーニング娘\'`date +\"%y\"`' WHERE db_key = 'モーニング娘。';"
+
+            - name: Register date
+              run: date +'%Y-%m-%d %H:%M:%S' > date.txt
+
+            - name: Compress data
+              run: zstd data.duckdb --ultra -22 -fk
+
+            - name: Commit changes
+              run: |
+                git lfs install
+                git lfs track data.duckdb.zst
+                git lfs track
+                git remote set-url origin https://github-actions:${{ github.token }}@github.com/${GITHUB_REPOSITORY}
+                git config --global core.quotepath off
+                git config --global user.name "${GITHUB_ACTOR}"
+                git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+                git status
+                git add data.duckdb.zst date.txt -f
+                git commit -m "Update Morning Musume group name @ $(date +'%Y-%m-%d %H:%M:%S')"
+                git push origin HEAD:${GITHUB_REF} -f
+
+
