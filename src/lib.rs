@@ -155,6 +155,7 @@ pub async fn struct_title(title: String) -> Result<StructedSongTitle, Error> {
     let song_info: StructedSongTitle = match serde_json::from_str(text) {
         Ok(song_info) => song_info,
         _ => {
+            eprintln!("Failed to parse response as StructedSongTitle: {}", text);
             return Err(anyhow!("Failed to parse response as StructedSongTitle: {}", text));
         }
     };
