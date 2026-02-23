@@ -1,0 +1,152 @@
+name: Add Source to __source__ Table
+
+on:
+  workflow_dispatch:
+    inputs:
+      playlist_key:
+        description: "YouTube Playlist Key (e.g. PLxxxxxx)"
+        required: true
+        type: string
+      db_key:
+        description: "Database Key / Table Name (e.g. アーティスト名)"
+        required: true
+        type: string
+      hashtag:
+        description: "Hashtag for Twitter (default: same as db_key)"
+        required: false
+        type: string
+      screen_name:
+        description: "Display name for Twitter (default: same as db_key)"
+        required: false
+        type: string
+      is_tweet:
+        description: "Enable tweet posting (1=yes, 0=no)"
+        required: false
+        default: "0"
+        type: choice
+        options:
+          - "0"
+          - "1"
+      display_name:
+        description: "Display name for group_list.json (default: same as screen_name)"
+        required: false
+        type: string
+
+env:
+  TZ: "Asia/Tokyo"
+
+permissions:
+  contents: write
+
+jobs:
+  add-source:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Install DuckDB CLI
+        run: |
+          curl https://install.duckdb.org | sh
+          echo '/home/runner/.duckdb/cli/latest' >> "$GITHUB_PATH"
+
+      - name: Extract zstd
+        run: |
+          zstd -dk -f data.duckdb.zst
+
+      - name: Resolve default values
+        run: |
+          PLAYLIST_KEY="${{ github.event.inputs.playlist_key }}"
+          DB_KEY="${{ github.event.inputs.db_key }}"
+          HASHTAG="${{ github.event.inputs.hashtag }}"
+          SCREEN_NAME="${{ github.event.inputs.screen_name }}"
+          DISPLAY_NAME="${{ github.event.inputs.display_name }}"
+          IS_TWEET="${{ github.event.inputs.is_tweet }}"
+
+          if [ -z "$HASHTAG" ]; then
+            HASHTAG="$DB_KEY"
+          fi
+          if [ -z "$SCREEN_NAME" ]; then
+            SCREEN_NAME="$DB_KEY"
+          fi
+          if [ -z "$DISPLAY_NAME" ]; then
+            DISPLAY_NAME="$SCREEN_NAME"
+          fi
+
+          echo "INPUT_PLAYLIST_KEY=$PLAYLIST_KEY" >> "$GITHUB_ENV"
+          echo "INPUT_DB_KEY=$DB_KEY" >> "$GITHUB_ENV"
+          echo "INPUT_HASHTAG=$HASHTAG" >> "$GITHUB_ENV"
+          echo "INPUT_SCREEN_NAME=$SCREEN_NAME" >> "$GITHUB_ENV"
+          echo "INPUT_DISPLAY_NAME=$DISPLAY_NAME" >> "$GITHUB_ENV"
+          echo "INPUT_IS_TWEET=$IS_TWEET" >> "$GITHUB_ENV"
+
+      - name: Insert into __source__
+        run: |
+          echo "Inserting: playlist_key=$INPUT_PLAYLIST_KEY, db_key=$INPUT_DB_KEY, hashtag=$INPUT_HASHTAG, screen_name=$INPUT_SCREEN_NAME, is_tweet=$INPUT_IS_TWEET"
+
+          duckdb data.duckdb <<'DUCKDB_SQL'
+          INSERT INTO __source__ (playlist_key, db_key, hashtag, screen_name, is_tweet)
+          VALUES (
+            getenv('INPUT_PLAYLIST_KEY'),
+            getenv('INPUT_DB_KEY'),
+            getenv('INPUT_HASHTAG'),
+            getenv('INPUT_SCREEN_NAME'),
+            CAST(getenv('INPUT_IS_TWEET') AS INTEGER)
+          );
+          DUCKDB_SQL
+
+      - name: Verify insertion
+        run: |
+          echo "Current __source__ table:"
+          duckdb data.duckdb <<'DUCKDB_SQL'
+          SELECT * FROM __source__ WHERE playlist_key = getenv('INPUT_PLAYLIST_KEY');
+          DUCKDB_SQL
+
+      - name: Update group_list.json
+        run: |
+          python3 -c "
+          import json, os
+          with open('group_list.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          db_key = os.environ['INPUT_DB_KEY']
+          display_name = os.environ['INPUT_DISPLAY_NAME']
+          if db_key not in data:
+              data[db_key] = display_name
+              with open('group_list.json', 'w', encoding='utf-8') as f:
+                  json.dump(data, f, ensure_ascii=False, indent=4)
+              print(f'Added \"{db_key}\": \"{display_name}\" to group_list.json')
+          else:
+              print(f'\"{db_key}\" already exists in group_list.json, skipping')
+          "
+
+      - name: Dump __source__ to playlists_build.sql
+        run: |
+          duckdb data.duckdb <<'DUCKDB_SQL' > playlists_build.sql
+          .mode insert __source__
+          SELECT playlist_key, db_key, hashtag, screen_name, is_tweet
+          FROM __source__
+          ORDER BY playlist_key;
+          DUCKDB_SQL
+
+      - name: Register date
+        run: date +'%Y-%m-%d %H:%M:%S' > date.txt
+
+      - name: Compress data
+        run: zstd data.duckdb --ultra -22 -fk
+
+      - name: Commit changes
+        run: |
+          git lfs install
+          git lfs track data.duckdb.zst
+          git lfs track
+          git remote set-url origin https://github-actions:${{ github.token }}@github.com/${GITHUB_REPOSITORY}
+          git config --global core.quotepath off
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git status
+          git add data.duckdb.zst date.txt group_list.json playlists_build.sql -f
+          git commit -m "Add source: $INPUT_DB_KEY ($INPUT_PLAYLIST_KEY) @ $(date +'%Y-%m-%d %H:%M:%S')"
+          git push origin HEAD:${GITHUB_REF} -f
