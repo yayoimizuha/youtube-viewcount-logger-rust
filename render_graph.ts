@@ -1,6 +1,6 @@
 // noinspection SqlNoDataSourceInspection,SqlDialectInspection
 
-import {DuckDBConnection, DuckDBInstance, DuckDBTimestampTZValue} from 'npm:@duckdb/node-api@1.3.2-alpha.26';
+import {DuckDBConnection, DuckDBInstance, DuckDBTimestampTZValue} from 'npm:@duckdb/node-api@1.5.0-r.1';
 import * as echarts from 'npm:echarts';
 import {EChartsOption, LineSeriesOption} from 'npm:echarts';
 import dayjs from 'npm:dayjs';
