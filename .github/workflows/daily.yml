@@ -154,6 +154,7 @@ jobs:
 
       - name: Processing tweet
         run: deno --allow-all render_graph.ts
+        continue-on-error: true
 
       - name: upload artifacts
         if: ${{ github.event.inputs.DEBUG }}
