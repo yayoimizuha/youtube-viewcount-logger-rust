@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Error};
 use chrono::{FixedOffset, SecondsFormat, Utc};
-use cron::Schedule;
 use once_cell::sync::Lazy;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Client;
@@ -8,10 +7,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
-use std::io::Read;
-use std::str::FromStr;
-use std::time::Duration;
 use url::Url;
 
 static GOOGLE_API_KEY: Lazy<String> = Lazy::new(|| env::var("GOOGLE_API_KEY").unwrap());
@@ -171,41 +166,8 @@ pub async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_pa
 }
 
 pub async fn get_desired_date() -> String {
-    // GitHub Actions では GITHUB_EVENT_PATH のJSONからcron文字列を解析して起動予定時刻を求める。
-    // それ以外（Cloud Run等）では現在時刻を使う。
     let jst = FixedOffset::east_opt(3600 * 9).unwrap();
-
-    let desired_date = if let Ok(env_val) = env::var("GITHUB_EVENT_PATH") {
-        let mut github_event_path = String::new();
-        File::open(env_val).unwrap().read_to_string(&mut github_event_path).unwrap();
-        match serde_json::from_str::<Value>(github_event_path.as_str())
-            .unwrap()
-            .get("schedule")
-        {
-            None => Utc::now(),
-            Some(schedule) => {
-                let cron_str = format!("0 {}", schedule.as_str().unwrap().trim());
-                let sched = Schedule::from_str(cron_str.as_str()).unwrap();
-                let mut duration = 100f32;
-                while sched
-                    .after(&(Utc::now() - Duration::from_secs_f32(duration)))
-                    .take_while(|&date| date < Utc::now())
-                    .count()
-                    == 0
-                {
-                    duration *= 1.2;
-                }
-                sched
-                    .after(&(Utc::now() - Duration::from_secs_f32(duration)))
-                    .next()
-                    .unwrap_or_else(|| Utc::now())
-            }
-        }
-    } else {
-        Utc::now()
-    };
-
-    desired_date
+    Utc::now()
         .with_timezone(&jst)
         .to_rfc3339_opts(SecondsFormat::AutoSi, true)
         .replace("T", " ")
