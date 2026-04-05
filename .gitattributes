@@ -1,3 +1,6 @@
 data.duckdb.zst filter=lfs diff=lfs merge=lfs -text
 misc.duckdb.zst filter=lfs diff=lfs merge=lfs -text
 assets/* filter=lfs diff=lfs merge=lfs -text
+
+# シェルスクリプトは Linux コンテナで実行するため LF を維持する
+deploy/*.sh text eol=lf
