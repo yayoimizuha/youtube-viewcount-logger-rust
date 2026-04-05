@@ -171,22 +171,11 @@ pub async fn youtube_data_api_v3<T: for<'de> serde::de::Deserialize<'de>>(api_pa
 }
 
 pub async fn get_desired_date() -> String {
-    // Cloud Run (GCP) では Cloud Scheduler が CLOUD_SCHEDULED_TIME 環境変数に
-    // スケジュール時刻を ISO 8601 形式（例: "2026-04-05T23:00:00Z"）で渡す。
-    // GitHub Actions では GITHUB_EVENT_PATH のJSONからcron文字列を解析して求める。
-    // どちらも取れない場合は現在時刻を使う。
+    // GitHub Actions では GITHUB_EVENT_PATH のJSONからcron文字列を解析して起動予定時刻を求める。
+    // それ以外（Cloud Run等）では現在時刻を使う。
     let jst = FixedOffset::east_opt(3600 * 9).unwrap();
 
-    let desired_date = if let Ok(scheduled_time) = env::var("CLOUD_SCHEDULED_TIME") {
-        // Cloud Run: Cloud Scheduler が設定した起動予定時刻
-        chrono::DateTime::parse_from_rfc3339(&scheduled_time)
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|e| {
-                eprintln!("Failed to parse CLOUD_SCHEDULED_TIME '{}': {}", scheduled_time, e);
-                Utc::now()
-            })
-    } else if let Ok(env_val) = env::var("GITHUB_EVENT_PATH") {
-        // GitHub Actions: event JSON の schedule フィールドから次回実行時刻を逆算
+    let desired_date = if let Ok(env_val) = env::var("GITHUB_EVENT_PATH") {
         let mut github_event_path = String::new();
         File::open(env_val).unwrap().read_to_string(&mut github_event_path).unwrap();
         match serde_json::from_str::<Value>(github_event_path.as_str())
@@ -213,7 +202,6 @@ pub async fn get_desired_date() -> String {
             }
         }
     } else {
-        // フォールバック: 現在時刻
         Utc::now()
     };
 
