@@ -34,44 +34,6 @@ impl PartialEq for VideoData {
 impl Eq for VideoData {}
 
 
-impl VideoData {
-    async fn get_data(
-        self,
-        executor: &Connection,
-        client: Client,
-    ) -> Result<VideoData, Error>
-    {
-        executor.execute("INSERT OR IGNORE INTO __title__(youtube_id) VALUES (?)", params![self.video_id.clone()])?;
-        match youtube_data_api_v3::<Value>("videos".to_owned(), HashMap::from([
-            ("part", "statistics,snippet"),
-            ("fields", "items(snippet(title,publishedAt),statistics/viewCount)"),
-            ("id", format!("{}", self.video_id).as_str())
-        ].map(|(t1/**/, t2)| { (t1.to_owned(), t2.to_owned()) })), client).await {
-            None => { Err(anyhow!("not valid JSON.")) }
-            Some(dat) => {
-                if ENABLE_DEBUG.load(Ordering::Relaxed) { println!("{}", dat); }
-                if dat["items"].as_array().ok_or(anyhow!("Parse error."))?.is_empty() {
-                    return Err(anyhow!("movie info is not available"));
-                }
-
-                let video_data = VideoData {
-                    video_id: self.video_id,
-                    title: dat["items"][0]["snippet"]["title"].as_str().map(|v| v.to_owned()),
-                    views: dat["items"][0]["statistics"]["viewCount"].as_str().map(|v| i64::from_str(v).unwrap()),
-                    published_at: dat["items"][0]["snippet"]["publishedAt"].as_str().map(|v| v.to_owned()),
-                };
-
-                match register_title(&executor, video_data.clone()).await {
-                    Ok(_) => {}
-                    Err(v) => {
-                        eprintln!("Error registering title: {}", v);
-                    }
-                };
-                Ok(video_data)
-            }
-        }
-    }
-}
 
 async fn register_title(executor: &Connection, video_data: VideoData) -> Result<(), Error> {
     match executor.prepare("SELECT raw_title FROM __title__ WHERE youtube_id = ?")?
@@ -228,24 +190,69 @@ async fn main() {
     // println!("{:?}", lookup_table);
     let all_videos = lookup_table.iter().map(|(_, v)| { v.into_iter() }).flatten().collect::<HashSet<_>>();
 
-    let all_videos_data = join_all(all_videos.into_iter().map(|video| { video.clone().get_data(&duckdb, client.clone()) })).await
-        .into_iter().filter_map(|v1| {
-        match &v1 {
-            Ok(_) => {}
-            Err(err) => {
-                eprintln!("Error fetching video data: {}", err);
-            }
-        }
-        v1.ok()
-    }).collect::<Vec<_>>();
+    let mut all_videos_vec = all_videos.into_iter().cloned().collect::<Vec<VideoData>>();
+    all_videos_vec.sort_by(|a, b| a.video_id.cmp(&b.video_id));
 
-    for video_data in all_videos_data {
-        for (_, group) in &mut lookup_table {
-            if group.contains(&video_data) {
-                group.remove(&video_data);
-                group.insert(video_data.clone());
+    // 全チャンクのレスポンスを video_id → VideoData のハッシュマップに集約する。
+    // APIから返ってこなかった動画はマップに存在しない（= views: None 扱い）。
+    let mut all_videos_map: HashMap<String, VideoData> = HashMap::new();
+    for results in join_all(all_videos_vec.chunks(50).map(|chunk| {
+        let chunk = chunk.to_vec();
+        let client = client.clone();
+        async move {
+            let ids = chunk.iter().map(|v| v.video_id.as_str()).collect::<Vec<_>>().join(",");
+            let Some(resp) = youtube_data_api_v3::<Value>(
+                "videos".to_owned(),
+                HashMap::from([
+                    ("part", "snippet,statistics"),
+                    ("fields", "items(id,snippet(title,publishedAt),statistics(viewCount))"),
+                    ("id", ids.as_str()),
+                ].map(|(k, v)| (k.to_owned(), v.to_owned()))),
+                client,
+            ).await else {
+                return vec![];
+            };
+            if resp.get("error").is_some() {
+                eprintln!("videos.list error: {}", resp["error"]);
+                return vec![];
             }
+            let item_map: HashMap<String, &Value> = resp
+                .get("items").and_then(|v| v.as_array()).into_iter().flatten()
+                .filter_map(|item| item.get("id")?.as_str().map(|id| (id.to_owned(), item)))
+                .collect();
+            chunk.iter().filter_map(|video| {
+                let item = item_map.get(&video.video_id)?;
+                Some(VideoData {
+                    video_id: video.video_id.clone(),
+                    title:        item["snippet"]["title"].as_str().map(|v| v.to_owned()),
+                    published_at: item["snippet"]["publishedAt"].as_str().map(|v| v.to_owned()),
+                    views:        item["statistics"]["viewCount"].as_str().and_then(|v| i64::from_str(v).ok()),
+                })
+            }).collect::<Vec<_>>()
         }
+    })).await {
+        for video_data in results {
+            all_videos_map.insert(video_data.video_id.clone(), video_data);
+        }
+    }
+
+    for res in join_all(all_videos_map.values().cloned().map(|v| register_title(&duckdb, v))).await {
+        if let Err(err) = res {
+            eprintln!("Error registering title: {}", err);
+        }
+    }
+
+    // lookup_table の各グループに取得済みデータを分配する。
+    // O(1) ルックアップで分配するため、二重ループを排除。
+    for (_, group) in &mut lookup_table {
+        let updated: HashSet<VideoData> = group
+            .iter()
+            .map(|v| match all_videos_map.get(&v.video_id) {
+                Some(data) => data.clone(),
+                None => v.clone(), // APIエラー or missing → views: None のまま
+            })
+            .collect();
+        *group = updated;
     }
     let transaction = duckdb.transaction().unwrap();
     for (key, set) in lookup_table {

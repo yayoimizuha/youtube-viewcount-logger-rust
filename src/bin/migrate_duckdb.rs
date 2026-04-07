@@ -1,6 +1,6 @@
 use duckdb::{params, Connection};
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Acquire, ConnectOptions};
+use sqlx::ConnectOptions;
 use std::fs;
 use std::path::PathBuf;
 
@@ -58,7 +58,7 @@ async fn main() {
 
     let playlists_build_sql = fs::read_to_string("playlists_build.sql").unwrap();
     rust_db.execute_batch(&playlists_build_sql).unwrap();
-    let __title__sql = fs::read_to_string("__title__.sql").unwrap();
-    rust_db.execute_batch(&__title__sql).unwrap();
+    let title_sql = fs::read_to_string("__title__.sql").unwrap();
+    rust_db.execute_batch(&title_sql).unwrap();
 }
 

@@ -2,5 +2,9 @@
     "githubPullRequests.ignoredPullRequestBranches": [
         "master"
     ],
-    "deno.enable": true
+    "deno.enable": true,
+    "chat.tools.terminal.autoApprove": {
+        "cargo check": true,
+        "cargo fmt": true
+    }
 }
