@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: check env
         run: echo ${{ env.RUN_HEAVY == 'true' }}
@@ -141,7 +141,7 @@ jobs:
           python-version: "3.12"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: |

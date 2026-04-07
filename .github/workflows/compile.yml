@@ -30,7 +30,7 @@ jobs:
           echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cargo cache restore
         if: github.event_name != 'schedule'

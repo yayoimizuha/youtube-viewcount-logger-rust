@@ -30,7 +30,7 @@ jobs:
           echo '/home/runner/.duckdb/cli/latest' >> "$GITHUB_PATH"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
