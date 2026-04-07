@@ -60,6 +60,13 @@ jobs:
       - name: Compress data
         run: zstd data.duckdb --ultra -22 -fk
 
+      - name: Upload artifact (debug)
+        if: ${{ github.event.inputs.DEBUG }}
+        uses: actions/upload-artifact@v7
+        with:
+          path: data.duckdb.zst
+          archive: false
+
       - name: Commit changes
         if: ${{ !github.event.inputs.DEBUG }}
         run: |
@@ -107,6 +114,13 @@ jobs:
 
       - name: Compress data
         run: zstd misc.duckdb --ultra -22 -fk
+
+      - name: Upload artifact (debug)
+        if: ${{ github.event.inputs.DEBUG }}
+        uses: actions/upload-artifact@v7
+        with:
+          path: misc.duckdb.zst
+          archive: false
 
       - name: Commit changes
         if: ${{ !github.event.inputs.DEBUG }}
@@ -158,12 +172,10 @@ jobs:
 
       - name: upload artifacts
         if: ${{ github.event.inputs.DEBUG }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: "debug-artifact"
-          path: |
-            debug
-            *.duckdb.zst
+          path: debug
 
   release:
     needs:
