@@ -34,7 +34,7 @@ jobs:
 
       - name: Cargo cache restore
         if: github.event_name != 'schedule'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cargo/registry
@@ -48,7 +48,7 @@ jobs:
           cargo build --profile relwithdebinfo
 
       - name: Cargo cache save
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ~/.cargo/registry

@@ -37,7 +37,7 @@ jobs:
           lfs: true
 
       - name: Cargo cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cargo/registry
@@ -95,7 +95,7 @@ jobs:
           ref: ${{ github.ref_name }}
 
       - name: Cargo cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cargo/registry
@@ -200,7 +200,7 @@ jobs:
           deno-version: v2.x
 
       - name: Cargo cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cargo/registry
