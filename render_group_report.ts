@@ -102,6 +102,7 @@ await (async () => {
         echartsInstance.dispose();
     }
 })();
+process.exit(0);
 
 async function main(): Promise<void> {
     const { typstSections, releaseSections } = await collectRenderAssets();
