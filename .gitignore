@@ -8,3 +8,7 @@ frame.pickle
 target/**
 debug/** */actionlint
 debug/**/*.png
+env.ps1
+*.duckdb
+*.xlsx
+logs_*/

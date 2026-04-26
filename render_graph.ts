@@ -79,6 +79,15 @@ const truncateToByteLength = (text: string) => {
     }
 }
 
+type TweetMediaIds = [string] | [string, string] | [string, string, string] | [string, string, string, string];
+
+const toTweetMediaIds = (mediaIds: string[]): TweetMediaIds | undefined => {
+    if (mediaIds.length >= 1 && mediaIds.length <= 4) {
+        return mediaIds as TweetMediaIds;
+    }
+    return undefined;
+}
+
 for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_name FROM information_schema.tables AS t1 LEFT JOIN (SELECT db_key,MIN(rowid) AS min_rowid FROM __source__ GROUP BY db_key) AS t2 ON t1.table_name = t2.db_key WHERE NOT STARTS_WITH(t1.table_name, \'__\') AND NOT ENDS_WITH(t1.table_name, \'__\') ORDER BY CASE WHEN t2.min_rowid IS NULL THEN 1 ELSE 0 END,t2.min_rowid;')).getRows())) {
     // if (table_name != '小片リサ') continue
     // if ((table_name != 'BEYOOOOONDS') && (table_name != 'モーニング娘。') && (table_name != 'ochanorma')) continue
@@ -282,8 +291,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
     console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
     const upload_media = async (image: Uint8Array, twitter: TwitterApi) => {
-        const buffer = Buffer.isBuffer(image) ? image : Buffer.from(image);
-        return await twitter.v1.uploadMedia(buffer, {mimeType: 'image/png'});
+        return await twitter.v2.uploadMedia(Buffer.from(image), {media_type: 'image/png'});
     }
 
     if (twitterClient && !is_debug) {
@@ -297,9 +305,10 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
                 console.error(`Media upload failed for ${table_name}:`, e);
             }
 
+            const media = toTweetMediaIds(mediaIds);
             await twitterClient.v2.tweet({
                 text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`),
-                media: {media_ids: mediaIds as [string, string] | [string]}
+                ...(media ? {media: {media_ids: media}} : {})
             });
             console.log(`Tweet posted for ${table_name}`);
         } catch (e) {
