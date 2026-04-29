@@ -10,6 +10,14 @@ type TestResult = {
   elapsedMs: number;
 };
 
+let hadUnhandledRejection = false;
+
+globalThis.addEventListener("unhandledrejection", (event) => {
+  hadUnhandledRejection = true;
+  event.preventDefault();
+  console.error(`UNHANDLED_REJECTION ${summarizeError(event.reason)}`);
+});
+
 const requiredEnv = [
   "TWITTER_APP_KEY",
   "TWITTER_APP_SECRET",
@@ -274,4 +282,8 @@ for (const [name, test] of tests) {
   if (!result.ok && failOnAnyFailure) {
     Deno.exitCode = 1;
   }
+}
+
+if (hadUnhandledRejection && failOnAnyFailure) {
+  Deno.exitCode = 1;
 }
