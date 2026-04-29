@@ -222,7 +222,10 @@ for (const key of requiredEnv) {
   }
 }
 
-const imagePath = Deno.args[0] ?? "image1.png";
+const argImagePath = Deno.args.find((arg) => !arg.startsWith("--"));
+const failOnAnyFailure = Deno.args.includes("--fail-on-any-failure") ||
+  Deno.env.get("FAIL_ON_ANY_FAILURE") === "true";
+const imagePath = argImagePath ?? "scripts/fixtures/twitter-media-upload.png";
 const image = await Deno.readFile(imagePath);
 console.log(
   `Testing media upload with ${
@@ -268,4 +271,7 @@ for (const [name, test] of tests) {
     `${result.ok ? "PASS" : "FAIL"} ${result.name} (${result.elapsedMs}ms)`,
   );
   console.log(result.detail);
+  if (!result.ok && failOnAnyFailure) {
+    Deno.exitCode = 1;
+  }
 }
