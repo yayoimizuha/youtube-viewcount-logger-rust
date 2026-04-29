@@ -291,7 +291,10 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
     console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
     const upload_media = async (image: Uint8Array, twitter: TwitterApi) => {
-        return await twitter.v2.uploadMedia(Buffer.from(image), {media_type: 'image/png'});
+        return await twitter.v1.uploadMedia(Buffer.from(image), {
+            mimeType: 'image/png',
+            target: 'tweet'
+        });
     }
 
     if (twitterClient && !is_debug) {
