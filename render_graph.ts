@@ -10,7 +10,6 @@ import {createCanvas, GlobalFonts} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
 import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
-import {TwitterApi} from 'npm:twitter-api-v2';
 import {createHmac, randomBytes} from 'node:crypto';
 import twitterText from 'npm:twitter-text@3.1.0';
 
@@ -37,35 +36,6 @@ const echarts_instance = echarts.init(null, null, {
 });
 
 const is_debug = (process.env.DEBUG || 'false').trim().toLowerCase() == 'true'
-
-// Twitter クライアント初期化 (環境変数が無い場合は null)
-const twitterClient = await (async () => {
-    const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
-    if (!required.every(k => process.env[k]) && is_debug) {
-        console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
-        return null;
-    }
-    const twitter_api: TwitterApi = new TwitterApi({
-        appKey: process.env.TWITTER_APP_KEY as string,
-        appSecret: process.env.TWITTER_APP_SECRET as string,
-        accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
-        accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
-    });
-
-    try {
-        await twitter_api.v2.tweet(
-            "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
-            "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
-            "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
-            "https://viewcount-logger-20043.web.app/"
-        )
-    } catch (e) {
-        console.error('Tweet failed for:', e);
-
-    }
-
-    return twitter_api;
-})();
 
 const truncateToByteLength = (text: string) => {
     const parsed = twitterText.parseTweet(text);
@@ -211,6 +181,48 @@ const uploadMedia = async (image: Uint8Array): Promise<string> => {
     const finalizeJson = await expectJson(finalizeResponse) as { media_id_string?: string };
     return finalizeJson.media_id_string ?? mediaId;
 }
+
+const postTweet = async (text: string, mediaIds: string[] = []) => {
+    const tweetUrl = 'https://api.x.com/1.1/statuses/update.json';
+    const tweetParams: Record<string, string> = {
+        status: text,
+    };
+    const media = toTweetMediaIds(mediaIds);
+    if (media) {
+        tweetParams.media_ids = media.join(',');
+    }
+    const response = await fetch(tweetUrl, {
+        method: 'POST',
+        headers: {
+            authorization: oauthHeader('POST', tweetUrl, tweetParams),
+            'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(tweetParams),
+    });
+    await expectJson(response);
+}
+
+const hasTwitterCredentials = await (async () => {
+    const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
+    if (!required.every(k => process.env[k])) {
+        console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
+        return false;
+    }
+
+    try {
+        await postTweet(
+            "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
+            "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
+            "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
+            "https://viewcount-logger-20043.web.app/"
+        )
+    } catch (e) {
+        console.error('Tweet failed for:', e);
+
+    }
+
+    return true;
+})();
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_name FROM information_schema.tables AS t1 LEFT JOIN (SELECT db_key,MIN(rowid) AS min_rowid FROM __source__ GROUP BY db_key) AS t2 ON t1.table_name = t2.db_key WHERE NOT STARTS_WITH(t1.table_name, \'__\') AND NOT ENDS_WITH(t1.table_name, \'__\') ORDER BY CASE WHEN t2.min_rowid IS NULL THEN 1 ELSE 0 END,t2.min_rowid;')).getRows())) {
     // if (table_name != '小片リサ') continue
@@ -414,7 +426,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
         .join('\n');
     console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
-    if (twitterClient && !is_debug) {
+    if (hasTwitterCredentials && !is_debug) {
         try {
             const mediaIds = [] as string[];
             try {
@@ -425,11 +437,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
                 console.error(`Media upload failed for ${table_name}:`, e);
             }
 
-            const media = toTweetMediaIds(mediaIds);
-            await twitterClient.v2.tweet({
-                text: truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`),
-                ...(media ? {media: {media_ids: media}} : {})
-            });
+            await postTweet(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`), mediaIds);
             console.log(`Tweet posted for ${table_name}`);
         } catch (e) {
             console.error(`Tweet failed for ${table_name}:`, e);
