@@ -11,7 +11,7 @@ import {Resvg} from 'npm:@resvg/resvg-js'
 import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
 import {Client as XClient, OAuth1, type Posts} from 'npm:@xdevplatform/xdk';
-import {createHmac, randomBytes} from 'node:crypto';
+import {Buffer} from 'node:buffer';
 import twitterText from 'npm:twitter-text@3.1.0';
 
 
@@ -59,128 +59,24 @@ const toTweetMediaIds = (mediaIds: string[]): TweetMediaIds | undefined => {
     return undefined;
 }
 
-const percentEncode = (value: string) =>
-    encodeURIComponent(value)
-        .replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-
-const oauthHeader = (
-    method: string,
-    rawUrl: string,
-    extraSignatureParams: Record<string, string> = {},
-) => {
-    const url = new URL(rawUrl);
-    const oauthParams: Record<string, string> = {
-        oauth_consumer_key: process.env.TWITTER_APP_KEY as string,
-        oauth_nonce: randomBytes(16).toString('hex'),
-        oauth_signature_method: 'HMAC-SHA1',
-        oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-        oauth_token: process.env.TWITTER_ACCESS_TOKEN as string,
-        oauth_version: '1.0',
-    };
-    const signatureParams = new URLSearchParams(url.search);
-    for (const [key, value] of Object.entries(extraSignatureParams)) {
-        signatureParams.append(key, value);
-    }
-    for (const [key, value] of Object.entries(oauthParams)) {
-        signatureParams.append(key, value);
-    }
-    const parameterString = [...signatureParams.entries()]
-        .sort(([ak, av], [bk, bv]) => ak === bk ? av.localeCompare(bv) : ak.localeCompare(bk))
-        .map(([key, value]) => `${percentEncode(key)}=${percentEncode(value)}`)
-        .join('&');
-    const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
-    const signatureBase = [
-        method.toUpperCase(),
-        percentEncode(baseUrl),
-        percentEncode(parameterString),
-    ].join('&');
-    const signingKey = `${percentEncode(process.env.TWITTER_APP_SECRET as string)}&${percentEncode(process.env.TWITTER_ACCESS_SECRET as string)}`;
-    oauthParams.oauth_signature = createHmac('sha1', signingKey)
-        .update(signatureBase)
-        .digest('base64');
-
-    return 'OAuth ' + Object.entries(oauthParams)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => `${percentEncode(key)}="${percentEncode(value)}"`)
-        .join(', ');
-}
-
-const expectJson = async (response: Response) => {
-    const text = await response.text();
-    let json: unknown;
-    try {
-        json = JSON.parse(text);
-    } catch {
-        json = text.slice(0, 500);
-    }
-    if (!response.ok) {
-        throw new Error(JSON.stringify({
-            status: response.status,
-            statusText: response.statusText,
-            body: json,
-        }));
-    }
-    return json;
-}
-
-const uploadMedia = async (image: Uint8Array): Promise<string> => {
-    const uploadUrl = 'https://upload.x.com/1.1/media/upload.json';
-    const initParams = {
-        command: 'INIT',
-        total_bytes: image.byteLength.toString(),
-        media_type: 'image/png',
-        media_category: 'tweet_image',
-    };
-    const initResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-            authorization: oauthHeader('POST', uploadUrl, initParams),
-            'content-type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(initParams),
-    });
-    const initJson = await expectJson(initResponse) as { media_id_string?: string };
-    const mediaId = initJson.media_id_string;
+const mediaIdFromResponse = (response: {data?: Record<string, unknown>}): string => {
+    const data = response.data ?? {};
+    const mediaId = data.id ?? data.media_id_string ?? data.media_id ?? data.mediaId;
     if (!mediaId) {
-        throw new Error(`INIT returned no media_id_string: ${JSON.stringify(initJson)}`);
+        throw new Error(`Media upload returned no media id: ${JSON.stringify(response)}`);
     }
+    return String(mediaId);
+}
 
-    const form = new FormData();
-    form.append('command', 'APPEND');
-    form.append('media_id', mediaId);
-    form.append('segment_index', '0');
-    const imagePart = image.buffer.slice(
-        image.byteOffset,
-        image.byteOffset + image.byteLength,
-    ) as ArrayBuffer;
-    form.append('media', new Blob([imagePart], {type: 'image/png'}), 'image.png');
-    const appendResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-            authorization: oauthHeader('POST', uploadUrl),
+const uploadMedia = async (client: XClient, image: Uint8Array): Promise<string> => {
+    const response = await client.media.upload({
+        body: {
+            media: Buffer.from(image).toString('base64'),
+            mediaType: 'image/png',
+            mediaCategory: 'tweet_image',
         },
-        body: form,
     });
-    if (!appendResponse.ok) {
-        await expectJson(appendResponse);
-    } else {
-        await appendResponse.arrayBuffer();
-    }
-
-    const finalizeParams = {
-        command: 'FINALIZE',
-        media_id: mediaId,
-    };
-    const finalizeResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-            authorization: oauthHeader('POST', uploadUrl, finalizeParams),
-            'content-type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(finalizeParams),
-    });
-    const finalizeJson = await expectJson(finalizeResponse) as { media_id_string?: string };
-    return finalizeJson.media_id_string ?? mediaId;
+    return mediaIdFromResponse(response);
 }
 
 const postTweet = async (client: XClient, text: string, mediaIds: string[] = []) => {
@@ -431,7 +327,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
             const mediaIds = [] as string[];
             try {
                 for (const image of [chart_png, table_png]) {
-                    mediaIds.push(await uploadMedia(image));
+                    mediaIds.push(await uploadMedia(twitterClient, image));
                 }
             } catch (e) {
                 console.error(`Media upload failed for ${table_name}:`, e);
