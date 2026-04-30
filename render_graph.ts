@@ -197,17 +197,18 @@ const twitterClient = await (async () => {
         accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
     });
 
-    try {
-        await client.v2.tweet(
-            "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
-            "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
-            "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
-            "https://viewcount-logger-20043.web.app/"
-        )
-    } catch (e) {
-        console.error('Tweet failed for:', e);
-
-    }
+    // URL付き投稿は Content: Create (with URL) 扱いで高価なので停止する。
+    // try {
+    //     await client.v2.tweet(
+    //         "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
+    //         "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
+    //         "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
+    //         "https://viewcount-logger-20043.web.app/"
+    //     )
+    // } catch (e) {
+    //     console.error('Tweet failed for:', e);
+    //
+    // }
 
     return client;
 })();
