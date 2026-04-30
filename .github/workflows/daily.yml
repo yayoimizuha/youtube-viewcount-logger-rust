@@ -10,7 +10,7 @@ env:
   TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
   TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
   GH_TOKEN: ${{ github.token }}
-  DEBUG: ${{ inputs.DEBUG == true }}
+  DEBUG: ${{ github.event.inputs.DEBUG }}
 
 permissions:
   contents: write
@@ -61,14 +61,14 @@ jobs:
         run: zstd data.duckdb --ultra -22 -fk
 
       - name: Upload artifact (debug)
-        if: ${{ inputs.DEBUG == true }}
+        if: ${{ github.event.inputs.DEBUG }}
         uses: actions/upload-artifact@v7
         with:
           path: data.duckdb.zst
           archive: false
 
       - name: Commit changes
-        if: ${{ inputs.DEBUG != true }}
+        if: ${{ !github.event.inputs.DEBUG }}
         run: |
           git lfs install
           git lfs track data.duckdb.zst
@@ -116,14 +116,14 @@ jobs:
         run: zstd misc.duckdb --ultra -22 -fk
 
       - name: Upload artifact (debug)
-        if: ${{ inputs.DEBUG == true }}
+        if: ${{ github.event.inputs.DEBUG }}
         uses: actions/upload-artifact@v7
         with:
           path: misc.duckdb.zst
           archive: false
 
       - name: Commit changes
-        if: ${{ inputs.DEBUG != true }}
+        if: ${{ !github.event.inputs.DEBUG }}
         run: |
           git lfs install
           git lfs track misc.duckdb.zst
@@ -171,7 +171,7 @@ jobs:
         continue-on-error: true
 
       - name: upload artifacts
-        if: ${{ inputs.DEBUG == true }}
+        if: ${{ github.event.inputs.DEBUG }}
         uses: actions/upload-artifact@v7
         with:
           name: "debug-artifact"
@@ -225,7 +225,7 @@ jobs:
 
       - name: Create daily release
         run: |
-          if [ "${{ inputs.DEBUG == true }}" = "true" ]; then
+          if [ "${{ github.event.inputs.DEBUG }}" = "true" ]; then
             RELEASE_TAG="debug-$(date +'%Y-%m-%d-%H%M%S')"
             RELEASE_TITLE="[DEBUG] Daily Report $(date +'%Y-%m-%d %H:%M:%S')"
             PRERELEASE_FLAG="--prerelease"
