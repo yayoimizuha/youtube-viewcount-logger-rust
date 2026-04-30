@@ -10,7 +10,7 @@ import {createCanvas, GlobalFonts} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
 import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
-import {TwitterApi} from 'npm:twitter-api-v2';
+import {Client as XClient, OAuth1, type Posts} from 'npm:@xdevplatform/xdk';
 import {createHmac, randomBytes} from 'node:crypto';
 import twitterText from 'npm:twitter-text@3.1.0';
 
@@ -183,6 +183,15 @@ const uploadMedia = async (image: Uint8Array): Promise<string> => {
     return finalizeJson.media_id_string ?? mediaId;
 }
 
+const postTweet = async (client: XClient, text: string, mediaIds: string[] = []) => {
+    const media = toTweetMediaIds(mediaIds);
+    const body: Posts.CreateRequest = {
+        text,
+        ...(media ? {media: {mediaIds: media}} : {})
+    };
+    await client.posts.create(body);
+}
+
 const twitterClient = await (async () => {
     const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
     if (!required.every(k => process.env[k])) {
@@ -190,16 +199,18 @@ const twitterClient = await (async () => {
         return null;
     }
 
-    const client = new TwitterApi({
-        appKey: process.env.TWITTER_APP_KEY as string,
-        appSecret: process.env.TWITTER_APP_SECRET as string,
+    const oauth1 = new OAuth1({
+        apiKey: process.env.TWITTER_APP_KEY as string,
+        apiSecret: process.env.TWITTER_APP_SECRET as string,
         accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
-        accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
+        accessTokenSecret: process.env.TWITTER_ACCESS_SECRET as string,
+        callback: 'oob',
     });
+    const client = new XClient({oauth1});
 
     // URL付き投稿は Content: Create (with URL) 扱いで高価なので停止する。
     // try {
-    //     await client.v2.tweet(
+    //     await postTweet(client,
     //         "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
     //         "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
     //         "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
@@ -429,16 +440,13 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
             const text = truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`);
             const media = toTweetMediaIds(mediaIds);
             try {
-                await twitterClient.v2.tweet({
-                    text,
-                    ...(media ? {media: {media_ids: media}} : {})
-                });
+                await postTweet(twitterClient, text, media ?? []);
             } catch (e) {
                 if (!media) {
                     throw e;
                 }
                 console.error(`Tweet with media failed for ${table_name}; retrying text-only:`, e);
-                await twitterClient.v2.tweet({text});
+                await postTweet(twitterClient, text);
             }
             console.log(`Tweet posted for ${table_name}`);
         } catch (e) {
