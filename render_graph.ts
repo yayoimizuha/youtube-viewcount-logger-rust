@@ -123,6 +123,8 @@ const expectJson = async (response: Response) => {
     return json;
 }
 
+const isCreditsDepleted = (error: unknown) => JSON.stringify(error).includes('CreditsDepleted');
+
 const uploadMedia = async (image: Uint8Array): Promise<string> => {
     const uploadUrl = 'https://upload.x.com/1.1/media/upload.json';
     const initParams = {
@@ -206,11 +208,16 @@ const twitterClient = await (async () => {
         )
     } catch (e) {
         console.error('Tweet failed for:', e);
+        if (isCreditsDepleted(e)) {
+            console.error('Twitter credits are depleted; skipping the remaining tweets in this run.');
+            return null;
+        }
 
     }
 
     return client;
 })();
+let skipTweetsForRun = twitterClient == null;
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_name FROM information_schema.tables AS t1 LEFT JOIN (SELECT db_key,MIN(rowid) AS min_rowid FROM __source__ GROUP BY db_key) AS t2 ON t1.table_name = t2.db_key WHERE NOT STARTS_WITH(t1.table_name, \'__\') AND NOT ENDS_WITH(t1.table_name, \'__\') ORDER BY CASE WHEN t2.min_rowid IS NULL THEN 1 ELSE 0 END,t2.min_rowid;')).getRows())) {
     // if (table_name != '小片リサ') continue
@@ -414,7 +421,7 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
         .join('\n');
     console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
-    if (twitterClient && !is_debug) {
+    if (twitterClient && !skipTweetsForRun && !is_debug) {
         try {
             const mediaIds = [] as string[];
             try {
@@ -437,11 +444,18 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
                     throw e;
                 }
                 console.error(`Tweet with media failed for ${table_name}; retrying text-only:`, e);
+                if (isCreditsDepleted(e)) {
+                    throw e;
+                }
                 await twitterClient.v2.tweet({text});
             }
             console.log(`Tweet posted for ${table_name}`);
         } catch (e) {
             console.error(`Tweet failed for ${table_name}:`, e);
+            if (isCreditsDepleted(e)) {
+                console.error('Twitter credits are depleted; skipping the remaining tweets in this run.');
+                skipTweetsForRun = true;
+            }
         }
     }
 }
