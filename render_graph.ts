@@ -183,7 +183,7 @@ const uploadMedia = async (image: Uint8Array): Promise<string> => {
 }
 
 const postTweet = async (text: string, mediaIds: string[] = []) => {
-    const tweetUrl = 'https://api.x.com/1.1/statuses/update.json';
+    const tweetUrl = 'https://api.twitter.com/1.1/statuses/update.json';
     const tweetParams: Record<string, string> = {
         status: text,
     };
