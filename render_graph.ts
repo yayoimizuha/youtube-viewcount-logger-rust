@@ -10,8 +10,6 @@ import {createCanvas, GlobalFonts} from 'npm:@napi-rs/canvas';
 import {Resvg} from 'npm:@resvg/resvg-js'
 import {spawnSync} from 'node:child_process';
 import * as process from 'node:process';
-import {Client as XClient, OAuth1, type Posts} from 'npm:@xdevplatform/xdk';
-import {Buffer} from 'node:buffer';
 import twitterText from 'npm:twitter-text@3.1.0';
 
 
@@ -28,6 +26,9 @@ const defaultFont = {
 }
 
 const graph_limit = 35;
+const xPostApiBaseUrl = 'https://x-post-api.mizuha-dev.com/';
+const xPostApiKey = process.env.X_POST_API_KEY;
+const xPostDelayMs = 15_000;
 
 const echarts_instance = echarts.init(null, null, {
     renderer: 'svg',
@@ -50,75 +51,32 @@ const truncateToByteLength = (text: string) => {
     }
 }
 
-type TweetMediaIds = [string] | [string, string] | [string, string, string] | [string, string, string, string];
+const postX = async (text: string, apiKey: string, images: Uint8Array[] = []) => {
+    const form = new FormData();
+    form.set('text', text);
 
-const toTweetMediaIds = (mediaIds: string[]): TweetMediaIds | undefined => {
-    if (mediaIds.length >= 1 && mediaIds.length <= 4) {
-        return mediaIds as TweetMediaIds;
+    for (const [index, image] of images.entries()) {
+        form.append(
+            'images',
+            new Blob([image as unknown as BlobPart], {type: 'image/png'}),
+            `image-${index + 1}.png`,
+        );
     }
-    return undefined;
-}
 
-const mediaIdFromResponse = (response: {data?: Record<string, unknown>}): string => {
-    const data = response.data ?? {};
-    const mediaId = data.id ?? data.media_id_string ?? data.media_id ?? data.mediaId;
-    if (!mediaId) {
-        throw new Error(`Media upload returned no media id: ${JSON.stringify(response)}`);
-    }
-    return String(mediaId);
-}
+    const headers: Record<string, string> = {};
+    headers['X-API-Key'] = apiKey;
 
-const uploadMedia = async (client: XClient, image: Uint8Array): Promise<string> => {
-    const response = await client.media.upload({
-        body: {
-            media: Buffer.from(image).toString('base64'),
-            mediaType: 'image/png',
-            mediaCategory: 'tweet_image',
-        },
+    const response = await fetch(new URL('/posts', xPostApiBaseUrl), {
+        method: 'POST',
+        headers,
+        body: form,
     });
-    return mediaIdFromResponse(response);
-}
 
-const postTweet = async (client: XClient, text: string, mediaIds: string[] = []) => {
-    const media = toTweetMediaIds(mediaIds);
-    const body: Posts.CreateRequest = {
-        text,
-        ...(media ? {media: {mediaIds: media}} : {})
-    };
-    await client.posts.create(body);
-}
-
-const twitterClient = await (async () => {
-    const required = ['TWITTER_APP_KEY', 'TWITTER_APP_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'] as const;
-    if (!required.every(k => process.env[k])) {
-        console.warn('Twitter credentials not fully set in env; tweeting will be skipped.');
-        return null;
+    if (!response.ok) {
+        throw new Error(`x-post-api returned ${response.status} ${response.statusText}: ${await response.text()}`);
     }
 
-    const oauth1 = new OAuth1({
-        apiKey: process.env.TWITTER_APP_KEY as string,
-        apiSecret: process.env.TWITTER_APP_SECRET as string,
-        accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
-        accessTokenSecret: process.env.TWITTER_ACCESS_SECRET as string,
-        callback: 'oob',
-    });
-    const client = new XClient({oauth1});
-
-    // URL付き投稿は Content: Create (with URL) 扱いで高価なので停止する。
-    // try {
-    //     await postTweet(client,
-    //         "毎日の最新データはこちらから👉https://github.com/yayoimizuha/youtube-viewcount-logger-python/releases/latest\n" +
-    //         "以下のサイトでグループごとの再生回数のグラフを見られます！\n" +
-    //         "拡大縮小したり、表示したい曲を選択して表示できたりして、毎日の画像ツイートより見やすくなっています！\n" +
-    //         "https://viewcount-logger-20043.web.app/"
-    //     )
-    // } catch (e) {
-    //     console.error('Tweet failed for:', e);
-    //
-    // }
-
-    return client;
-})();
+}
 
 for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_name FROM information_schema.tables AS t1 LEFT JOIN (SELECT db_key,MIN(rowid) AS min_rowid FROM __source__ GROUP BY db_key) AS t2 ON t1.table_name = t2.db_key WHERE NOT STARTS_WITH(t1.table_name, \'__\') AND NOT ENDS_WITH(t1.table_name, \'__\') ORDER BY CASE WHEN t2.min_rowid IS NULL THEN 1 ELSE 0 END,t2.min_rowid;')).getRows())) {
     // if (table_name != '小片リサ') continue
@@ -322,31 +280,18 @@ for (const [table_name] of (await (await duckdb_connection.run('SELECT t1.table_
         .join('\n');
     console.log(truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`))
 
-    if (twitterClient && !is_debug) {
+    if (!is_debug) {
+        if (!xPostApiKey) {
+            console.warn(`X_POST_API_KEY is not set; skipping X post for ${table_name}.`);
+            continue;
+        }
         try {
-            const mediaIds = [] as string[];
-            try {
-                for (const image of [chart_png, table_png]) {
-                    mediaIds.push(await uploadMedia(twitterClient, image));
-                }
-            } catch (e) {
-                console.error(`Media upload failed for ${table_name}:`, e);
-            }
-
             const text = truncateToByteLength(`#hpytvc 昨日からの再生回数: #${hashtag}\n${tweet_text}`);
-            const media = toTweetMediaIds(mediaIds);
-            try {
-                await postTweet(twitterClient, text, media ?? []);
-            } catch (e) {
-                if (!media) {
-                    throw e;
-                }
-                console.error(`Tweet with media failed for ${table_name}; retrying text-only:`, e);
-                await postTweet(twitterClient, text);
-            }
-            console.log(`Tweet posted for ${table_name}`);
+            await postX(text, xPostApiKey, [chart_png, table_png]);
+            console.log(`X post created for ${table_name}`);
+            await new Promise(resolve => setTimeout(resolve, xPostDelayMs));
         } catch (e) {
-            console.error(`Tweet failed for ${table_name}:`, e);
+            console.error(`X post failed for ${table_name}:`, e);
         }
     }
 }
