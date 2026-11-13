@@ -40,7 +40,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-build-
 
       - name: Compile all binaries
@@ -54,5 +53,4 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-build-${{ steps.uuid.outputs.uuid }}

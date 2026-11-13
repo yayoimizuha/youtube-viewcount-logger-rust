@@ -23,7 +23,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-
 
       - name: Download save.sqlite
@@ -57,5 +56,4 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-${{ steps.uuid.outputs.uuid }}

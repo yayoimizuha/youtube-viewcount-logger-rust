@@ -1,4 +1,5 @@
 Pipfile.lock
+Cargo.lock
 .idea/*
 __pycache__
 outdated_script/out.txt

@@ -40,7 +40,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
@@ -98,7 +97,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
@@ -203,7 +201,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            Cargo.lock
           key: ${{ runner.os }}-cargo-build-
 
       - name: extract zstd
